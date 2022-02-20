@@ -5,7 +5,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "start": "node ./node_modules/parcel-bundler/bin/cli serve ./src/index.html --port 8080",
-    "build": "node ./node_modules/parcel-bundler/bin/cli build ./src/index.html --out-dir ./dist/",
+    "build": "node ./node_modules/parcel-bundler/bin/cli build ./src/index.html --public-url https://ellwise.github.io/caretaker/ --out-dir ./dist/",
     "lint": "node ./node_modules/eslint/bin/eslint . --ext .js --fix"
   },
   "repository": {
@@ -13,8 +13,8 @@
     "url": ""
   },
   "keywords": [],
-  "author": "",
-  "license": "MIT",
+  "author": "Elliott Wise",
+  "license": "GPL",
   "devDependencies": {
     "eslint": "^8.9.0",
     "eslint-config-airbnb-base": "^15.0.0",
@@ -24,6 +24,7 @@
   "dependencies": {
     "cannon-es": "^0.19.0",
     "lil-gui": "^0.16.1",
+    "style.css": "^1.0.1",
     "three": "^0.137.5"
   }
 }
