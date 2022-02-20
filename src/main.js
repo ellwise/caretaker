@@ -27,17 +27,11 @@ const gui = new dat.GUI()
 const params = {
     
     floorSize : 30,
-    sphereCount : 3,
     sphereVelocity : 5,
     raycastForce : 150,
-    gravity : -9.81,
-    sphereRatio : 0.5,
-    metalness : 0.0,
-    roughness: 1.0,
-    chamaleonForce: 10
+    gravity : 9.81,  // upwards
 }
 gui.add(params, 'raycastForce')
-gui.add(params, 'chamaleonForce', 1, 100, 0.01)
 
 
 /**
@@ -77,7 +71,7 @@ window.addEventListener('resize', () =>
 
 // Base camera
 const camera = new THREE.PerspectiveCamera(27, sizes.width / sizes.height, 0.1, 500)
-camera.position.set(- 30, 30, 30)
+camera.position.set(-60, 30, 60)
 scene.add(camera)
 
 // Controls
@@ -111,7 +105,7 @@ world.gravity.set(0, params.gravity, 0) // si earth gravity
 world.broadphase = new CANNON.SAPBroadphase(world)
 world.allowSleep = false  // to ensure we keep colliding when things stop moving
 
-gui.add(params, 'gravity', -50, 0, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
+gui.add(params, 'gravity', 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
 /**
  * Textures
  */
@@ -175,39 +169,10 @@ world.defaultContactMaterial = defaultContactMaterial
 // each element has a mesh and a body properties
 const updateList = []
 
-const materials = Array.from(Array(25), (v, i) => {
-    return new THREE.MeshStandardMaterial({
-        color: `hsl(${(137 * i) % 360}, 100%, 60%)`,
-        metalness: params.metalness,
-        roughness: params.roughness,
-        /*envMap: environmentMapTexture,
-        envMapIntensity: 0.5,
-        map : objectTexture*/
-    })
-})
-
-gui.add(params, 'metalness', 0, 1, 0.01)
-.name('shape metalness')
-.onChange(v => {
-    for(const mat of materials){
-        mat.metalness = v
-    }
-})
-gui.add(params, 'roughness', 0, 1, 0.01)
-.name('shape roughness')
-.onChange(v => {
-    for(const mat of materials){
-        mat.roughness = v
-    }
-})
-
 /**
  * Spheres
  */
-//const SPHERES = 10
-
 const sphereGeo = new THREE.SphereGeometry(1, 32, 32)
-//const boxGeo = new THREE.BoxGeometry(1, 1, 1)
 
 const linkBodyMesh = (body, mesh) =>{
     /**
@@ -221,61 +186,114 @@ const linkBodyMesh = (body, mesh) =>{
     //body.linearFactor = new CANNON.Vec3(0,0,0)
 }
 
-const createSpheres = (radius) => {
-    for (let j=-1; j<2; j++) {
-      // Mesh
-      const sphereMesh = new THREE.Mesh(
-          sphereGeo,
-          materials[Math.floor(Math.random()*materials.length)]
-      )
-      sphereMesh.castShadow = true
-      sphereMesh.scale.set(radius, radius, radius)
-      sphereMesh.position.set(0.25 * j * params.floorSize, 3, 0.25 * j * params.floorSize)
-      scene.add(sphereMesh)
-
-      // Physics
-      const sphereShape = new CANNON.Sphere(radius)
-      const sphereBody = new CANNON.Body({
-          mass: 1.333 * radius * radius * radius * Math.PI /* * Math.random() + .5,*/,
-          shape: sphereShape,
-          material : defaultMaterial,
-          angularDamping: 0.8,
-      })
-      sphereBody.position.copy(sphereMesh.position)
-      world.addBody(sphereBody)
-      linkBodyMesh(sphereBody, sphereMesh)
+const createSphere = (radius, position, rowNum) => {
+    // Mesh
+    let sphereMaterial
+    if (rowNum == undefined) {
+        sphereMaterial = new THREE.MeshStandardMaterial({
+            color: 'hsl(0%, 100%, 60%)',
+        })
+    } else {
+        sphereMaterial = new THREE.MeshStandardMaterial({
+            color: `hsl(${(30 * rowNum) % 360}, 100%, 60%)`,
+        })
     }
+    const sphereMesh = new THREE.Mesh(sphereGeo, sphereMaterial)
+    sphereMesh.castShadow = true
+    sphereMesh.scale.set(radius, radius, radius)
+    if (position == undefined) {
+        sphereMesh.position.set(0, 1, 0)
+    } else {
+        sphereMesh.position.set(position.x, position.y + 2*radius, position.z)
+    }
+    scene.add(sphereMesh)
+
+    // Physics
+    const sphereShape = new CANNON.Sphere(radius)
+    const sphereBody = new CANNON.Body({
+        mass: 1.333 * radius * radius * radius * Math.PI, /* * Math.random() + .5,*/
+        shape: sphereShape,
+        material : defaultMaterial,
+        angularDamping: 0.8,
+    })
+    sphereBody.position.copy(sphereMesh.position)
+    world.addBody(sphereBody)
+    linkBodyMesh(sphereBody, sphereMesh)
+
+    return sphereBody
 }
 
+const linkSpheres = (s1, s2, radius) => {
+    let pointConstraint = new CANNON.DistanceConstraint(
+        s1, s2, 0.8 * 2 * radius,
+    )
+    world.addConstraint(pointConstraint)
+}
 
-createSpheres(1)
+const spheres = [[]]
 
+const radius = 1
+const s01 = createSphere(radius)
+const s02 = createSphere(radius)
+const s03 = createSphere(radius)
+const s04 = createSphere(radius)
+const s05 = createSphere(radius)
+spheres[0].push(s01, s02, s03, s04, s05)
 
-let spherebody0 = updateList[0].body
-let spherebody1 = updateList[1].body
-let spring = new CANNON.Spring(spherebody0, spherebody1, {
-  localAnchorA: new CANNON.Vec3(0, 0, 0),
-  localAnchorB: new CANNON.Vec3(0, 0, 0),
-  restLength: 1,
-  stiffness: 10,
-  damping: 1,
-})
+// link first row
+linkSpheres(s01, s02, radius)
+linkSpheres(s02, s03, radius)
+linkSpheres(s03, s04, radius)
+linkSpheres(s04, s05, radius)
 
-// Compute the force after each step
-world.addEventListener('postStep', (event) => {
-  spring.applyForce()
-})
+const repelSpheres = (s1, s2) => {
+    let spring = new CANNON.Spring(s1, s2, {
+        localAnchorA: new CANNON.Vec3(0, 0, 0),
+        localAnchorB: new CANNON.Vec3(0, 0, 0),
+        restLength: 100,
+        stiffness: 50,
+        damping: 1,
+    })
+    
+    // Compute the force after each step
+    world.addEventListener('postStep', (event) => {
+    spring.applyForce()
+    })
+}
 
-
-
-let spherebody2 = updateList[2].body
-const pointConstraint = new CANNON.PointToPointConstraint(
-  spherebody1,
-  new CANNON.Vec3(0, 1, 0),
-  spherebody2,
-  new CANNON.Vec3(0, -1, 0)
-)
-world.addConstraint(pointConstraint)
+params.growSheet = () => {
+    // add a new row of spheres
+    const newSpheres = []
+    for (let j=0; j<spheres[spheres.length - 1].length; j++) {
+        let num = Math.random() < 0.5 ? 2 : 1
+        for (let k=0; k<num; k++) {
+            newSpheres.push(
+                createSphere(
+                    radius,
+                    spheres[spheres.length - 1][j].position,
+                    spheres.length
+                )
+            )
+        }
+        for (let k=1; k <= num; k++) {
+            linkSpheres(
+                spheres[spheres.length - 1][j],
+                newSpheres[newSpheres.length - k],
+                radius,
+            )
+        }
+    }
+    // join the spheres in the new row
+    spheres.push(newSpheres)
+    for (let j=0; j<spheres[spheres.length - 1].length - 1; j++) {
+        linkSpheres(
+            spheres[spheres.length - 1][j],
+            spheres[spheres.length - 1][j + 1],
+            radius,
+        )
+    }
+}
+gui.add(params,'growSheet')
 
 
 
@@ -317,14 +335,7 @@ params.growBalls()
 const floorGeo = new THREE.PlaneGeometry(params.floorSize, params.floorSize)
 const floorMat =  new THREE.MeshStandardMaterial({
     color: '#ffffff',
-    metalness: 0.3,
-    roughness: 1.0,
-    /*envMap: environmentMapTexture,
-    envMapIntensity: 0.9*/
 })
-
-gui.add(floorMat, 'roughness', 0, 1, 0.01).name('floor roughness')
-gui.add(floorMat, 'metalness', 0, 1, 0.01).name('floor metalness')
 
 //physics
 const planeShape = new CANNON.Plane()
@@ -348,6 +359,7 @@ const makePlane = (position, rotation) => {
     world.addBody(planeBody)
     scene.add(planeMesh)
 
+    return planeBody
 }
 
 
@@ -355,11 +367,23 @@ const makePlane = (position, rotation) => {
 const posVec = new Vector3()
 const rotVec = new Vector3()
 //floor
-makePlane(posVec.set(0, 0, 0), rotVec.set(- Math.PI * 0.5, 0, 0))
+const floor = makePlane(posVec.set(0, 0, 0), rotVec.set(- Math.PI * 0.5, 0, 0))
+const gc01 = new CANNON.PointToPointConstraint(
+    s01, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(-4, 0, 0)
+)
+const gc03 = new CANNON.PointToPointConstraint(
+    s03, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(0, 0, 0)
+)
+const gc05 = new CANNON.PointToPointConstraint(
+    s05, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(4, 0, 0)
+)
+world.addConstraint(gc01)
+world.addConstraint(gc03)
+world.addConstraint(gc05)
 //roof
 makePlane(posVec.set(0, params.floorSize, 0), rotVec.set(Math.PI * 0.5, 0, 0))
 
-//wals
+//walls
 const wallOffset = params.floorSize / 2
 makePlane(posVec.set(0, wallOffset, -wallOffset), rotVec.set(0, 0, 0))
 makePlane(posVec.set(wallOffset, wallOffset, 0), rotVec.set(0, -Math.PI * 0.5, 0))
@@ -390,18 +414,6 @@ scene.add(directionalLight)
 directionalLight.position.set(params.floorSize/2, params.floorSize/2, params.floorSize/2)
 directionalLight.target.position.set(directionalLight.target.position.x, directionalLight.target.position.y, directionalLight.target.position.z)
 
-/**
- * Chamaleon Event Trigger
- */
-
- for(const obj of updateList){
-    obj.body.addEventListener('collide', (details) => {
-        if(details.contact.getImpactVelocityAlongNormal() > params.chamaleonForce){
-            updateList[details.target.meshID].mesh.material = materials[Math.floor(Math.random()*materials.length)]
-        }
-    })
-}
-
 
 /**
  * Force Applying
@@ -420,8 +432,6 @@ const applyForce = (body, point, direction, force) => {
     pointVec.vsub(bodyPos,pointVec)
     
     body.vectorToLocalFrame(tjsforceVec, forceVec)
-    // console.log(forceVec)
-    // console.log(pointVec, body.position)
     body.applyLocalImpulse(forceVec, pointVec) //forceVec.copy(direction.multiplyScalar(force)))
 }
 
