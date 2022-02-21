@@ -29,6 +29,7 @@ const params = {
     sphereVelocity : 5,
     raycastForce : 150,
     gravity : 9.81,  // upwards
+    replicationFactor: 0.4,
 }
 gui.add(params, 'raycastForce')
 
@@ -86,7 +87,7 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-renderer.setClearColor(0x07E09A)
+renderer.setClearColor(0x8ad4eb)  // background color
 // Mouse
 const mouse = new THREE.Vector2()
 window.addEventListener('mousemove', event => {
@@ -102,7 +103,9 @@ window.addEventListener('mousemove', event => {
 const world = new CANNON.World()
 world.gravity.set(0, params.gravity, 0) // si earth gravity
 world.broadphase = new CANNON.SAPBroadphase(world)
+world.broadphase.useBoundingBoxes = true
 world.allowSleep = false  // to ensure we keep colliding when things stop moving
+world.solver.iterations = 3 // default is 10
 
 gui.add(params, 'gravity', 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
 /**
@@ -190,11 +193,11 @@ const createSphere = (radius, position, rowNum) => {
     let sphereMaterial
     if (rowNum == undefined) {
         sphereMaterial = new THREE.MeshStandardMaterial({
-            color: 'hsl(0%, 100%, 60%)',
+            color: 'hsl(0, 100%, 60%)',
         })
     } else {
         sphereMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(${(30 * rowNum) % 360}, 100%, 60%)`,
+            color: `hsl(${(5 * rowNum) % 360}, 100%, 60%)`,
         })
     }
     const sphereMesh = new THREE.Mesh(sphereGeo, sphereMaterial)
@@ -224,7 +227,7 @@ const createSphere = (radius, position, rowNum) => {
 
 const linkSpheres = (s1, s2, radius) => {
     let pointConstraint = new CANNON.DistanceConstraint(
-        s1, s2, 0.8 * 2 * radius,
+        s1, s2, 1.05 * 2 * radius,
     )
     world.addConstraint(pointConstraint)
 }
@@ -250,7 +253,7 @@ const repelSpheres = (s1, s2) => {
         localAnchorA: new CANNON.Vec3(0, 0, 0),
         localAnchorB: new CANNON.Vec3(0, 0, 0),
         restLength: 100,
-        stiffness: 50,
+        stiffness: 25,
         damping: 1,
     })
     
@@ -260,11 +263,14 @@ const repelSpheres = (s1, s2) => {
     })
 }
 
+gui.add(params, 'replicationFactor', 0, 1, 0.01).onChange(v => {params.replicationFactor = v})
+
 params.growSheet = () => {
+
     // add a new row of spheres
     const newSpheres = []
     for (let j=0; j<spheres[spheres.length - 1].length; j++) {
-        let num = Math.random() < 0.5 ? 2 : 1
+        let num = Math.random() < params.replicationFactor ? 2 : 1
         for (let k=0; k<num; k++) {
             newSpheres.push(
                 createSphere(
@@ -289,6 +295,13 @@ params.growSheet = () => {
             spheres[spheres.length - 1][j],
             spheres[spheres.length - 1][j + 1],
             radius,
+        )
+    }
+    // repel spheres that are doubly-separated (to straighten edges)
+    for (let j=0; j<spheres[spheres.length - 1].length - 2; j++) {
+        repelSpheres(
+            spheres[spheres.length - 1][j],
+            spheres[spheres.length - 1][j + 2],
         )
     }
 }
@@ -368,13 +381,13 @@ const rotVec = new Vector3()
 //floor
 const floor = makePlane(posVec.set(0, 0, 0), rotVec.set(- Math.PI * 0.5, 0, 0))
 const gc01 = new CANNON.PointToPointConstraint(
-    s01, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(-4, 0, 0)
+    s01, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(-4*1.05, 0, 0)
 )
 const gc03 = new CANNON.PointToPointConstraint(
     s03, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(0, 0, 0)
 )
 const gc05 = new CANNON.PointToPointConstraint(
-    s05, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(4, 0, 0)
+    s05, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(4*1.05, 0, 0)
 )
 world.addConstraint(gc01)
 world.addConstraint(gc03)
