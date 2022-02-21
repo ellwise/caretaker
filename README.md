@@ -14,6 +14,8 @@
 4. Push the branch
 5. Come back to main
 6. Add dist to .gitignore
+7. Add the a worktree attached to the dist folder and gh-pages branch
+8. Never delete the dist folder (just its contents), otherwise you'll need to repeat the previous step
 
 ```
 git checkout --orphan gh-pages
