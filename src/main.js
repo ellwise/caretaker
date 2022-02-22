@@ -26,7 +26,7 @@ const gui = new dat.GUI()
 
 const params = {
     
-    floorSize : 60,
+    floorSize : 35,  // something weird happening with shadows if this is too large
     sphereVelocity : 20,
     raycastForce : 350,
     gravity : 9.81,  // upwards
