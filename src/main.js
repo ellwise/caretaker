@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
+import { OutlineEffect } from 'three/examples/jsm/effects/OutlineEffect.js'
 import * as dat from 'lil-gui'
 import * as CANNON from 'cannon-es'
 import { Vector2, Vector3 } from 'three'
@@ -25,9 +26,9 @@ const gui = new dat.GUI()
 
 const params = {
     
-    floorSize : 30,
-    sphereVelocity : 5,
-    raycastForce : 150,
+    floorSize : 60,
+    sphereVelocity : 20,
+    raycastForce : 350,
     gravity : 9.81,  // upwards
     replicationFactor: 0.4,
 }
@@ -78,6 +79,7 @@ scene.add(camera)
 const controls = new OrbitControls(camera, canvas)
 controls.target = new Vector3(0, 5, 0)
 controls.enableDamping = true
+controls.enablePan = false
 
 // Renderer
 const renderer = new THREE.WebGLRenderer({
@@ -87,7 +89,9 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-renderer.setClearColor(0x8ad4eb)  // background color
+renderer.setClearColor(0xc7fdf7)  // background color
+let effect = new OutlineEffect( renderer )
+
 // Mouse
 const mouse = new THREE.Vector2()
 window.addEventListener('mousemove', event => {
@@ -102,10 +106,10 @@ window.addEventListener('mousemove', event => {
  */
 const world = new CANNON.World()
 world.gravity.set(0, params.gravity, 0) // si earth gravity
-world.broadphase = new CANNON.SAPBroadphase(world)
+world.broadphase = new CANNON.SAPBroadphase(world)  // GridBroadphase(world)  // 
 world.broadphase.useBoundingBoxes = true
 world.allowSleep = false  // to ensure we keep colliding when things stop moving
-world.solver.iterations = 3 // default is 10
+world.solver.iterations = 10 // default is 10
 
 gui.add(params, 'gravity', 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
 /**
@@ -188,18 +192,21 @@ const linkBodyMesh = (body, mesh) =>{
     //body.linearFactor = new CANNON.Vec3(0,0,0)
 }
 
+/*
+const texture = new THREE.TextureLoader()
+texture.load('textures/fourTone.jpg')
+texture.minFilter = THREE.NearestFilter
+texture.magFilter = THREE.NearestFilter
+console.log(texture)
+*/
+
 const createSphere = (radius, position, rowNum) => {
     // Mesh
-    let sphereMaterial
-    if (rowNum == undefined) {
-        sphereMaterial = new THREE.MeshStandardMaterial({
-            color: 'hsl(0, 100%, 60%)',
-        })
-    } else {
-        sphereMaterial = new THREE.MeshStandardMaterial({
-            color: `hsl(${(5 * rowNum) % 360}, 100%, 60%)`,
-        })
-    }
+    const colour = new THREE.Color()
+    rowNum == undefined ? colour.setHSL(0, 1, 0.6) : colour.setHSL(0.02 * rowNum % 360, 1, 0.6)
+    const sphereMaterial = new THREE.MeshToonMaterial()
+    sphereMaterial.color = colour
+    //sphereMaterial.gradientMap = texture
     const sphereMesh = new THREE.Mesh(sphereGeo, sphereMaterial)
     sphereMesh.castShadow = true
     sphereMesh.scale.set(radius, radius, radius)
@@ -217,6 +224,7 @@ const createSphere = (radius, position, rowNum) => {
         shape: sphereShape,
         material : defaultMaterial,
         angularDamping: 0.8,
+        linearDamping: 0.2,
     })
     sphereBody.position.copy(sphereMesh.position)
     world.addBody(sphereBody)
@@ -254,12 +262,12 @@ const repelSpheres = (s1, s2) => {
         localAnchorB: new CANNON.Vec3(0, 0, 0),
         restLength: 100,
         stiffness: 25,
-        damping: 1,
+        damping: 100,
     })
     
     // Compute the force after each step
     world.addEventListener('postStep', (event) => {
-    spring.applyForce()
+        spring.applyForce()
     })
 }
 
@@ -340,14 +348,50 @@ gui.add(params,'growBalls')
 params.growBalls()
 
 
+// rock
+const rockRadius = 10
+const detail = 0
+const rockGeo = new THREE.IcosahedronGeometry(rockRadius, detail)
+//const rockGeo = new THREE.SphereGeometry(rockRadius)
+const rockMat = new THREE.MeshToonMaterial({ color: 0x808487 })
+const rockMesh = new THREE.Mesh(rockGeo, rockMat)
+rockMesh.castShadow = true
+//rockMesh.scale.set(rockRadius, rockRadius, rockRadius)
+rockMesh.receiveShadow = true
+rockMesh.position.set(-10, 5, -10)
+scene.add(rockMesh)
+
+
+let position = rockMesh.geometry.attributes.position.array
+const rockPoints = []
+for (let i = 0; i < position.length; i += 3) {
+    rockPoints.push(new CANNON.Vec3(position[i], position[i + 1], position[i + 2]))
+}
+const rockFaces = []
+for (let i = 0; i < position.length / 3; i += 3) {
+    rockFaces.push([i, i + 1, i + 2])
+}
+//rockMesh.scale.set(0.95, 0.95, 0.95) // make smaller after collision body creation to avoid clipping?
+const rockShape = new CANNON.ConvexPolyhedron({
+    vertices: rockPoints,
+    faces: rockFaces,
+})
+//const rockShape = new CANNON.Sphere(rockRadius)
+const rockBody = new CANNON.Body({
+    mass: 0,  // so it's not affected by gravity! otherwise the body will move but the mesh will remain
+    shape: rockShape,
+})
+rockBody.material = defaultMaterial  // adding this after creation sets collisionResponse to true?
+rockBody.position.copy(rockMesh.position)
+world.addBody(rockBody)
+
+
 /**
  * Floor
  */
 //mesh
 const floorGeo = new THREE.PlaneGeometry(params.floorSize, params.floorSize)
-const floorMat =  new THREE.MeshStandardMaterial({
-    color: '#ffffff',
-})
+const floorMat =  new THREE.MeshStandardMaterial({ color: 0xfff77a })
 
 //physics
 const planeShape = new CANNON.Plane()
@@ -392,6 +436,8 @@ const gc05 = new CANNON.PointToPointConstraint(
 world.addConstraint(gc01)
 world.addConstraint(gc03)
 world.addConstraint(gc05)
+
+/*
 //roof
 makePlane(posVec.set(0, params.floorSize, 0), rotVec.set(Math.PI * 0.5, 0, 0))
 
@@ -401,7 +447,7 @@ makePlane(posVec.set(0, wallOffset, -wallOffset), rotVec.set(0, 0, 0))
 makePlane(posVec.set(wallOffset, wallOffset, 0), rotVec.set(0, -Math.PI * 0.5, 0))
 makePlane(posVec.set(0, wallOffset, wallOffset), rotVec.set(0, Math.PI * 1.0, 0))
 makePlane(posVec.set(-wallOffset, wallOffset, 0), rotVec.set(0, -Math.PI * 1.5, 0))
-
+*/
 
 
 /**
@@ -410,7 +456,7 @@ makePlane(posVec.set(-wallOffset, wallOffset, 0), rotVec.set(0, -Math.PI * 1.5, 
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
 scene.add(ambientLight)
 
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4)
+const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9)
 
 directionalLight.castShadow = true
 directionalLight.shadow.mapSize.set(1024, 1024)
@@ -493,7 +539,7 @@ const tick = () =>
     controls.update()
 
     // Render
-    renderer.render(scene, camera)
+    effect.render(scene, camera)
 
     // Stats update
     stats.update()
