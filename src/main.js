@@ -1,7 +1,7 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
 import { camera, controls, effect, gui, mouse, scene, stats, world } from "./base.js"
-import { plasticMaterial } from "./materials.js"
+import { createSphere, linkSpheres, repelSpheres } from "./coral.js"
 import { createRock, attachRaycastSelector } from "./rock.js"
 import { createSandPatch } from "./sand.js"
 
@@ -21,111 +21,28 @@ gui.add(params, "replicationFactor", 0, 1, 0.01).onChange(v => { params.replicat
 world.gravity.set(0, params.gravity, 0) // si earth gravity
 
 /**
- * Textures
- */
-// const textureLoader = new THREE.TextureLoader()
-// const cubeTextureLoader = new THREE.CubeTextureLoader()
-
-/*
-const environmentMapTexture = cubeTextureLoader.load([
-    '/textures/environmentMaps/0/px.png',
-    '/textures/environmentMaps/0/nx.png',
-    '/textures/environmentMaps/0/py.png',
-    '/textures/environmentMaps/0/ny.png',
-    '/textures/environmentMaps/0/pz.png',
-    '/textures/environmentMaps/0/nz.png'
-])
-const objectTexture = textureLoader.load('/textures/1.png')
-*/
-
-/**
  * Update List
  */
 const registeredMeshesBodies = []
 const registerMeshBodyPair = (mesh, body) => registeredMeshesBodies.push({ mesh: mesh, body: body })
 
-/*
-const texture = new THREE.TextureLoader()
-texture.load('textures/fourTone.jpg')
-texture.minFilter = THREE.NearestFilter
-texture.magFilter = THREE.NearestFilter
-console.log(texture)
-*/
-
 /**
  * Spheres
  */
-const sphereGeo = new THREE.SphereGeometry(1, 32, 32)
 
-const createSphere = (radius, position, rowNum) => {
-  // Mesh
-  const colour = new THREE.Color()
-  rowNum === undefined ? colour.setHSL(0, 1, 0.6) : colour.setHSL(0.02 * rowNum % 360, 1, 0.6)
-  const sphereMaterial = new THREE.MeshToonMaterial()
-  sphereMaterial.color = colour
-  // sphereMaterial.gradientMap = texture
-  const sphereMesh = new THREE.Mesh(sphereGeo, sphereMaterial)
-  sphereMesh.castShadow = true
-  sphereMesh.scale.set(radius, radius, radius)
-  if (position === undefined) {
-    sphereMesh.position.set(0, 1, 0)
-  } else {
-    sphereMesh.position.set(position.x, position.y + 2 * radius, position.z)
-  }
-  scene.add(sphereMesh)
-
-  // Physics
-  const sphereShape = new CANNON.Sphere(radius)
-  const sphereBody = new CANNON.Body({
-    mass: 1.333 * radius * radius * radius * Math.PI, /* * Math.random() + .5, */
-    shape: sphereShape,
-    material: plasticMaterial,
-    angularDamping: 0.8,
-    linearDamping: 0.2,
-  })
-  sphereBody.position.copy(sphereMesh.position)
-  world.addBody(sphereBody)
-  registerMeshBodyPair(sphereMesh, sphereBody)
-
-  return sphereBody
-}
-
-const linkSpheres = (s1, s2, radius) => {
-  const pointConstraint = new CANNON.DistanceConstraint(
-    s1, s2, 1.05 * 2 * radius,
-  )
-  world.addConstraint(pointConstraint)
-}
-
+// create first row
 const spheres = [[]]
-
 const radius = 1
-const s01 = createSphere(radius)
-const s02 = createSphere(radius)
-const s03 = createSphere(radius)
-const s04 = createSphere(radius)
-const s05 = createSphere(radius)
-spheres[0].push(s01, s02, s03, s04, s05)
+for (let j = 0; j < 5; j++) {
+  spheres[0].push(createSphere(radius))
+  scene.add(spheres[0][j].mesh)
+  world.addBody(spheres[0][j].body)
+  registerMeshBodyPair(spheres[0][j].mesh, spheres[0][j].body)
+}
 
 // link first row
-linkSpheres(s01, s02, radius)
-linkSpheres(s02, s03, radius)
-linkSpheres(s03, s04, radius)
-linkSpheres(s04, s05, radius)
-
-const repelSpheres = (s1, s2) => {
-  const spring = new CANNON.Spring(s1, s2, {
-    localAnchorA: new CANNON.Vec3(0, 0, 0),
-    localAnchorB: new CANNON.Vec3(0, 0, 0),
-    restLength: 100,
-    stiffness: 25,
-    damping: 100,
-  })
-
-  // Compute the force after each step
-  world.addEventListener("postStep", (event) => {
-    spring.applyForce()
-  })
+for (let j = 0; j < spheres[0].length - 1; j++) {
+  linkSpheres(spheres[0][j].body, spheres[0][j + 1].body, radius, world)
 }
 
 params.growSheet = () => {
@@ -137,66 +54,41 @@ params.growSheet = () => {
       newSpheres.push(
         createSphere(
           radius,
-          spheres[spheres.length - 1][j].position,
+          spheres[spheres.length - 1][j].body.position,
           spheres.length,
         ),
       )
-    }
-    for (let k = 1; k <= num; k++) {
+      scene.add(newSpheres[newSpheres.length - 1].mesh)
+      world.addBody(newSpheres[newSpheres.length - 1].body)
+      registerMeshBodyPair(newSpheres[newSpheres.length - 1].mesh, newSpheres[newSpheres.length - 1].body)
       linkSpheres(
-        spheres[spheres.length - 1][j],
-        newSpheres[newSpheres.length - k],
+        spheres[spheres.length - 1][j].body,
+        newSpheres[newSpheres.length - 1].body,
         radius,
+        world,
       )
     }
   }
-  // join the spheres in the new row
   spheres.push(newSpheres)
+  // join the spheres in the new row
   for (let j = 0; j < spheres[spheres.length - 1].length - 1; j++) {
     linkSpheres(
-      spheres[spheres.length - 1][j],
-      spheres[spheres.length - 1][j + 1],
+      spheres[spheres.length - 1][j].body,
+      spheres[spheres.length - 1][j + 1].body,
       radius,
+      world,
     )
   }
   // repel spheres that are doubly-separated (to straighten edges)
   for (let j = 0; j < spheres[spheres.length - 1].length - 2; j++) {
     repelSpheres(
-      spheres[spheres.length - 1][j],
-      spheres[spheres.length - 1][j + 2],
+      spheres[spheres.length - 1][j].body,
+      spheres[spheres.length - 1][j + 2].body,
+      world,
     )
   }
 }
 gui.add(params, "growSheet")
-
-/*
-params.jiggleBalls = () => {
-  for (const pair of updateList) {
-    pair.body.velocity.set(
-      normRandom() * params.sphereVelocity,
-      normRandom() * 5,
-      normRandom() * params.sphereVelocity,
-    )
-  }
-}
-gui.add(params, "jiggleBalls")
-params.jiggleBalls()
-
-params.growBalls = () => {
-  params.jiggleBalls()
-  for (const pair of updateList) {
-    const shape = pair.body.shapes[0]
-    pair.body.removeShape(shape)
-    shape.radius *= 1.05
-    pair.body.addShape(shape)
-    pair.mesh.scale.x *= 1.05
-    pair.mesh.scale.y *= 1.05
-    pair.mesh.scale.z *= 1.05
-  }
-}
-gui.add(params, "growBalls")
-params.growBalls()
-*/
 
 /*
  *  Rock
@@ -223,18 +115,16 @@ world.addBody(floorBody)
 /*
  *  Constrain coral to floor
  */
-const gc01 = new CANNON.PointToPointConstraint(
-  s01, new CANNON.Vec3(0, -1, 0), floorBody, new CANNON.Vec3(-4 * 1.05, 0, 0),
-)
-const gc03 = new CANNON.PointToPointConstraint(
-  s03, new CANNON.Vec3(0, -1, 0), floorBody, new CANNON.Vec3(0, 0, 0),
-)
-const gc05 = new CANNON.PointToPointConstraint(
-  s05, new CANNON.Vec3(0, -1, 0), floorBody, new CANNON.Vec3(4 * 1.05, 0, 0),
-)
-world.addConstraint(gc01)
-world.addConstraint(gc03)
-world.addConstraint(gc05)
+for (let j = 0; j < spheres[0].length; j += 2) {
+  world.addConstraint(
+    new CANNON.PointToPointConstraint(
+      spheres[0][j].body,
+      new CANNON.Vec3(0, -1, 0),
+      floorBody,
+      new CANNON.Vec3(1.2 * (2 * j - 4), 0, 0),
+    ),
+  )
+}
 
 /*
  *  Lighting

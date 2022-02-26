@@ -4,10 +4,17 @@ import { concreteMaterial } from "./materials.js"
 
 const rockColor = 0x808487
 const selectedColor = 0xff0000
+const numShades = 6
 
 const createRock = (position, radius, detail) => {
   // geometry - nb: BufferGeometry is already non-indexed (i.e. faces don't share vertices)
   const geometry = new THREE.IcosahedronGeometry(radius, detail)
+  const shades = new Uint8Array(numShades)
+  for (let j = 0; j <= shades.length; j++) {
+    shades[j] = (j / shades.length) * 256
+  }
+  const gradientMap = new THREE.DataTexture(shades, shades.length, 1, THREE.RedFormat)
+  gradientMap.needsUpdate = true
   const colors = []
   for (let j = 0; j < geometry.attributes.position.count; j += 3) {
     const color = new THREE.Color(rockColor)
@@ -18,9 +25,9 @@ const createRock = (position, radius, detail) => {
   geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3))
 
   // mesh
-  const material = new THREE.MeshToonMaterial({ vertexColors: true })
+  const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradientMap })
   const mesh = new THREE.Mesh(geometry, material)
-  mesh.castShadow = true
+  // mesh.castShadow = true
   mesh.receiveShadow = true
   mesh.position.set(...position)
 
