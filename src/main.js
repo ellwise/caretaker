@@ -1,31 +1,25 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
-import { Vector3 } from "three"
-import { camera, controls, effect, gui, scene, stats, world } from "./base.js"
-import { defaultMaterial, plasticMaterial } from "./materials.js"
-import { rockMesh, rockBody } from "./rock.js"
+import { camera, controls, effect, gui, mouse, scene, stats, world } from "./base.js"
+import { plasticMaterial } from "./materials.js"
+import { createRock, attachRaycastSelector } from "./rock.js"
+import { createSandPatch } from "./sand.js"
 
 const params = {
-
   floorSize: 50,
   sphereVelocity: 20,
   gravity: 9.81, // positive = upwards (buoyancy)
   replicationFactor: 0.4,
 }
-
-/**
- * Aux Functions
- */
-const normRandom = () => {
-  return (Math.random() - 0.5) * 2
-}
+gui.add(params, "gravity", 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
+gui.add(params, "replicationFactor", 0, 1, 0.01).onChange(v => { params.replicationFactor = v })
 
 /**
  * Debug
  */
 
 world.gravity.set(0, params.gravity, 0) // si earth gravity
-gui.add(params, "gravity", 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
+
 /**
  * Textures
  */
@@ -47,23 +41,8 @@ const objectTexture = textureLoader.load('/textures/1.png')
 /**
  * Update List
  */
-// Holds object references to mesh and physics objects
-// each element has a mesh and a body properties
-const updateList = []
-
-/**
- * Spheres
- */
-const sphereGeo = new THREE.SphereGeometry(1, 32, 32)
-
-const linkBodyMesh = (body, mesh) => {
-  // raycast reference
-  mesh.bodyID = updateList.length
-  body.meshID = updateList.length
-  // update list
-  updateList.push({ mesh: mesh, body: body })
-  // body.linearFactor = new CANNON.Vec3(0,0,0)
-}
+const registeredMeshesBodies = []
+const registerMeshBodyPair = (mesh, body) => registeredMeshesBodies.push({ mesh: mesh, body: body })
 
 /*
 const texture = new THREE.TextureLoader()
@@ -72,6 +51,11 @@ texture.minFilter = THREE.NearestFilter
 texture.magFilter = THREE.NearestFilter
 console.log(texture)
 */
+
+/**
+ * Spheres
+ */
+const sphereGeo = new THREE.SphereGeometry(1, 32, 32)
 
 const createSphere = (radius, position, rowNum) => {
   // Mesh
@@ -101,7 +85,7 @@ const createSphere = (radius, position, rowNum) => {
   })
   sphereBody.position.copy(sphereMesh.position)
   world.addBody(sphereBody)
-  linkBodyMesh(sphereBody, sphereMesh)
+  registerMeshBodyPair(sphereMesh, sphereBody)
 
   return sphereBody
 }
@@ -144,8 +128,6 @@ const repelSpheres = (s1, s2) => {
   })
 }
 
-gui.add(params, "replicationFactor", 0, 1, 0.01).onChange(v => { params.replicationFactor = v })
-
 params.growSheet = () => {
   // add a new row of spheres
   const newSpheres = []
@@ -187,6 +169,7 @@ params.growSheet = () => {
 }
 gui.add(params, "growSheet")
 
+/*
 params.jiggleBalls = () => {
   for (const pair of updateList) {
     pair.body.velocity.set(
@@ -213,75 +196,54 @@ params.growBalls = () => {
 }
 gui.add(params, "growBalls")
 params.growBalls()
-
+*/
 
 /*
  *  Rock
  */
+const rockPosition = new THREE.Vector3(-10, 5, -10)
+const rockRadius = 10
+const rockDetail = 1
+const { mesh: rockMesh, body: rockBody } = createRock(rockPosition, rockRadius, rockDetail)
 scene.add(rockMesh)
 world.addBody(rockBody)
+registerMeshBodyPair(rockMesh, rockBody)
+attachRaycastSelector(rockMesh, mouse, camera)
 
 /**
  * Floor
  */
-const floorGeo = new THREE.PlaneGeometry(params.floorSize, params.floorSize)
-const floorMat = new THREE.MeshStandardMaterial({ color: 0xfff77a })
-const planeShape = new CANNON.Plane()
+const floorRadius = params.floorSize / 2
+const floorPosition = new THREE.Vector3(0, 0, 0)
+const floorRotation = new THREE.Vector3(-Math.PI * 0.5, 0, 0)
+const { mesh: floorMesh, body: floorBody } = createSandPatch(floorPosition, floorRotation, floorRadius)
+scene.add(floorMesh)
+world.addBody(floorBody)
 
-// generator function
-const makePlane = (position, rotation) => {
-  const planeMesh = new THREE.Mesh(floorGeo, floorMat)
-  planeMesh.receiveShadow = true
-  planeMesh.rotation.set(...rotation)
-  planeMesh.position.set(...position)
-
-  const planeBody = new CANNON.Body({ mass: 0 })
-  planeBody.position.copy(planeMesh.position)
-  planeBody.quaternion.copy(planeMesh.quaternion)
-  // planeBody.quaternion.setFromAxisAngle(new CANNON.Vec3(-1, 0, 0), Math.PI * 0.5)
-  planeBody.addShape(planeShape)
-  planeBody.material = defaultMaterial
-
-  world.addBody(planeBody)
-  scene.add(planeMesh)
-
-  return planeBody
-}
-
-const posVec = new Vector3()
-const rotVec = new Vector3()
-// floor
-const floor = makePlane(posVec.set(0, 0, 0), rotVec.set(-Math.PI * 0.5, 0, 0))
+/*
+ *  Constrain coral to floor
+ */
 const gc01 = new CANNON.PointToPointConstraint(
-  s01, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(-4 * 1.05, 0, 0),
+  s01, new CANNON.Vec3(0, -1, 0), floorBody, new CANNON.Vec3(-4 * 1.05, 0, 0),
 )
 const gc03 = new CANNON.PointToPointConstraint(
-  s03, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(0, 0, 0),
+  s03, new CANNON.Vec3(0, -1, 0), floorBody, new CANNON.Vec3(0, 0, 0),
 )
 const gc05 = new CANNON.PointToPointConstraint(
-  s05, new CANNON.Vec3(0, -1, 0), floor, new CANNON.Vec3(4 * 1.05, 0, 0),
+  s05, new CANNON.Vec3(0, -1, 0), floorBody, new CANNON.Vec3(4 * 1.05, 0, 0),
 )
 world.addConstraint(gc01)
 world.addConstraint(gc03)
 world.addConstraint(gc05)
 
 /*
-//roof
-makePlane(posVec.set(0, params.floorSize, 0), rotVec.set(Math.PI * 0.5, 0, 0))
-
-//walls
-const wallOffset = params.floorSize / 2
-makePlane(posVec.set(0, wallOffset, -wallOffset), rotVec.set(0, 0, 0))
-makePlane(posVec.set(wallOffset, wallOffset, 0), rotVec.set(0, -Math.PI * 0.5, 0))
-makePlane(posVec.set(0, wallOffset, wallOffset), rotVec.set(0, Math.PI * 1.0, 0))
-makePlane(posVec.set(-wallOffset, wallOffset, 0), rotVec.set(0, -Math.PI * 1.5, 0))
-*/
-
+ *  Lighting
+ */
 
 const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9)
 directionalLight.castShadow = true
 directionalLight.shadow.mapSize.set(1024, 1024)
-directionalLight.shadow.camera.far = 100  // needs to correspond to distance I want shadows to reach? i.e. floorSize?
+directionalLight.shadow.camera.far = 100 // needs to correspond to distance I want shadows to reach? i.e. floorSize?
 directionalLight.shadow.camera.left = -params.floorSize * 0.6
 directionalLight.shadow.camera.top = params.floorSize * 0.6
 directionalLight.shadow.camera.right = params.floorSize * 0.6
@@ -313,7 +275,7 @@ const tick = () => {
   world.step(1 / 75, delta, 5)
 
   // Update Meshes
-  for (const pair of updateList) {
+  for (const pair of registeredMeshesBodies) {
     pair.mesh.position.copy(pair.body.position)
     pair.mesh.quaternion.copy(pair.body.quaternion)
   }

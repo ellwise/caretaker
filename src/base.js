@@ -19,7 +19,7 @@ document.body.appendChild(stats.dom)
 
 // Scene
 const scene = new THREE.Scene()
-const axes = new THREE.AxesHelper()
+const axes = new THREE.AxesHelper(10)
 scene.add(axes)
 
 // Base camera

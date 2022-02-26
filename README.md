@@ -1,5 +1,21 @@
 # Caretaker
 
+## Todo
+
+Game mechanics
+- [ ] Make rock more rock-like (deform vertices, maybe join tris into quads)
+- [ ] Attach coral (coloured sphere) to empty selected face
+- [ ] Place selected coral into an inventory
+- [ ] Breed coral onto an empty face
+- [ ] Bleach and kill coral over time
+- [ ] Add a scoring mechanism
+
+Visuals
+- [ ] Zoom in and out from selected/deselected face
+- [ ] Water effect
+- [ ] Day/night and longer passage of time
+- [ ] Complex coral shapes
+
 ## Run locally
 
 `npm run start`
