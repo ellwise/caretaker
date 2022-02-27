@@ -27,6 +27,7 @@
   "dependencies": {
     "cannon-es": "^0.19.0",
     "lil-gui": "^0.16.1",
+    "open-simplex-noise": "^2.5.0",
     "style.css": "^1.0.1",
     "three": "^0.137.5"
   }

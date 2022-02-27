@@ -93,7 +93,7 @@ gui.add(params, "growSheet")
 /*
  *  Rock
  */
-const rockPosition = new THREE.Vector3(-10, 5, -10)
+const rockPosition = new THREE.Vector3(0, 5, -15)
 const rockRadius = 10
 const rockDetail = 1
 const { mesh: rockMesh, body: rockBody } = createRock(rockPosition, rockRadius, rockDetail)

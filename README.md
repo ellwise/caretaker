@@ -3,7 +3,7 @@
 ## Todo
 
 Game mechanics
-- [ ] Make rock more rock-like (deform vertices, maybe join tris into quads)
+- [x] Make rock more rock-like (deform vertices, maybe join tris into quads)
 - [ ] Attach coral (coloured sphere) to empty selected face
 - [ ] Place selected coral into an inventory
 - [ ] Breed coral onto an empty face
