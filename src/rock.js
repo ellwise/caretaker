@@ -50,7 +50,7 @@ const createRock = (position, radius, detail) => {
   // mesh
   const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradientMap })
   const mesh = new THREE.Mesh(geometry, material)
-  // mesh.castShadow = true
+  //mesh.castShadow = true
   mesh.receiveShadow = true
   mesh.position.set(...position)
 

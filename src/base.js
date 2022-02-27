@@ -32,8 +32,13 @@ const controls = new OrbitControls(camera, canvas)
 controls.target = new Vector3(0, 5, 0)
 controls.enableDamping = true
 controls.enablePan = false
+controls.minPolarAngle = - Math.PI / 2
+controls.maxPolarAngle = Math.PI / 2
+controls.minDistance = 30
+controls.maxDistance = 150
 
 // Renderer
+const backgroundColour = 0xc7fdf7
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
   antialias: true,
@@ -42,7 +47,7 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-renderer.setClearColor(0xc7fdf7) // background color
+renderer.setClearColor(backgroundColour) // background color
 const effect = new OutlineEffect(renderer, {defaultThickness: 0.005})
 
 // Mouse

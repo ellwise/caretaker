@@ -3,7 +3,7 @@ import * as THREE from "three"
 import { camera, controls, effect, gui, mouse, scene, stats, world } from "./base.js"
 import { createSphere, linkSpheres, repelSpheres, addSeed } from "./coral.js"
 import { createRock, attachRaycast, removeHighlight, addHighlight } from "./rock.js"
-import { createSandPatch } from "./sand.js"
+import { createSubsurface, createSandPatch } from "./sand.js"
 
 const params = {
   floorSize: 50,
@@ -93,7 +93,7 @@ gui.add(params, "growSheet")
 /*
  *  Rock
  */
-const rockPosition = new THREE.Vector3(0, 5, -15)
+const rockPosition = new THREE.Vector3(0, 5, 0)
 const rockRadius = 10
 const rockDetail = 1
 const { mesh: rockMesh, body: rockBody } = createRock(rockPosition, rockRadius, rockDetail)
@@ -115,6 +115,8 @@ attachRaycast(rockMesh, mouse, camera, "click", undefined, clickHandler)
 const floorRadius = params.floorSize / 2
 const floorPosition = new THREE.Vector3(0, 0, 0)
 const floorRotation = new THREE.Vector3(-Math.PI * 0.5, 0, 0)
+const subsurfaceMesh = createSubsurface(floorPosition, floorRotation, 10*floorRadius)
+scene.add(subsurfaceMesh)
 const { mesh: floorMesh, body: floorBody } = createSandPatch(floorPosition, floorRotation, floorRadius)
 scene.add(floorMesh)
 world.addBody(floorBody)
@@ -128,7 +130,7 @@ for (let j = 0; j < spheres[0].length; j += 2) {
       spheres[0][j].body,
       new CANNON.Vec3(0, -1, 0),
       floorBody,
-      new CANNON.Vec3(1.2 * (2 * j - 4), 0, 0),
+      new CANNON.Vec3(1.2 * (2 * j - 4), 15, 0),
     ),
   )
 }

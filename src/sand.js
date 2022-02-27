@@ -1,8 +1,23 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
+import { Vector3 } from "three"
 import { defaultMaterial } from "./materials.js"
 
 const sandColor = 0xfff77a
+const backgroundColour = 0xc7fdf7
+
+const createSubsurface = (position, rotation, radius) => {
+  const segments = 128
+  const subsurfacePosition = new Vector3().copy(position)
+  subsurfacePosition.add(new Vector3(0, -0.1, 0))
+  const geometry = new THREE.CircleGeometry(radius, segments)
+  const material = new THREE.MeshStandardMaterial({ color: backgroundColour })
+  const mesh = new THREE.Mesh(geometry, material)
+  mesh.position.set(...subsurfacePosition)
+  mesh.rotation.set(...rotation)
+
+  return mesh
+}
 
 const createSandPatch = (position, rotation, radius) => {
   const segments = 128
@@ -24,7 +39,7 @@ const createSandPatch = (position, rotation, radius) => {
   return { mesh: mesh, body: body }
 }
 
-export { createSandPatch }
+export { createSandPatch, createSubsurface }
 
 /*
 //roof

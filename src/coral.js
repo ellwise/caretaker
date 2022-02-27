@@ -24,9 +24,9 @@ const createSphere = (radius, position, rowNum, mass) => {
   gradientMap.needsUpdate = true
   const material = new THREE.MeshToonMaterial({ color: colour, gradientMap: gradientMap })
   const mesh = new THREE.Mesh(geometry, material)
-  mesh.castShadow = true
+  mesh.castShadow = false
   if (position === undefined) {
-    mesh.position.set(0, 1, 0)
+    mesh.position.set(0, 15, 0)
   } else {
     mesh.position.set(position.x, position.y + 2 * radius, position.z)
   }
