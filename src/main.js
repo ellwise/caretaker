@@ -1,8 +1,8 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
 import { camera, controls, effect, gui, mouse, scene, stats, world } from "./base.js"
-import { createSphere, linkSpheres, repelSpheres } from "./coral.js"
-import { createRock, attachRaycastSelector } from "./rock.js"
+import { createSphere, linkSpheres, repelSpheres, addSeed } from "./coral.js"
+import { createRock, attachRaycast, removeHighlight, addHighlight } from "./rock.js"
 import { createSandPatch } from "./sand.js"
 
 const params = {
@@ -100,7 +100,14 @@ const { mesh: rockMesh, body: rockBody } = createRock(rockPosition, rockRadius, 
 scene.add(rockMesh)
 world.addBody(rockBody)
 registerMeshBodyPair(rockMesh, rockBody)
-attachRaycastSelector(rockMesh, mouse, camera)
+attachRaycast(rockMesh, mouse, camera, "mousemove", removeHighlight, addHighlight)
+const clickHandler = (selected, intersects) => {
+  const {mesh: mesh, body: body} = addSeed(selected, intersects)
+  scene.add(mesh)
+  world.addBody(body)
+  registerMeshBodyPair(mesh, body)
+}
+attachRaycast(rockMesh, mouse, camera, "click", undefined, clickHandler)
 
 /**
  * Floor

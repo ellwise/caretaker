@@ -3,18 +3,17 @@ import * as THREE from "three"
 import { plasticMaterial } from "./materials.js"
 
 const numShades = 6
+const seedColor = 0xff3333  // hsl(0, 1, 0.6)
 
-const createSphere = (radius, position, rowNum) => {
+const createSphere = (radius, position, rowNum, mass) => {
   // geometry
   const widthSegments = 32
   const heightSegments = 32
   const geometry = new THREE.SphereGeometry(radius, widthSegments, heightSegments)
 
   // mesh
-  const colour = new THREE.Color()
-  if (rowNum === undefined) {
-    colour.setHSL(0, 1, 0.6)
-  } else {
+  const colour = new THREE.Color(seedColor)
+  if (rowNum !== undefined) {
     colour.setHSL(0.012 * rowNum % 360, 1, 0.6)
   }
   const shades = new Uint8Array(numShades)
@@ -37,7 +36,7 @@ const createSphere = (radius, position, rowNum) => {
 
   // body
   const body = new CANNON.Body({
-    mass: 1.333 * radius * radius * radius * Math.PI, /* * Math.random() + .5, */
+    mass: mass !== undefined ? mass : 1.333 * radius * radius * radius * Math.PI,
     shape: shape,
     material: plasticMaterial,
     angularDamping: 0.8,
@@ -68,7 +67,21 @@ const repelSpheres = (s1, s2, world) => {
   world.addEventListener("postStep", (event) => spring.applyForce())
 }
 
-export { createSphere, linkSpheres, repelSpheres }
+const addSeed = (selected, intersects) => {
+  // raycast is intersecting something
+  if (intersects.length > 0) {
+    // the first thing being intersected is different to the current selection
+    if (selected !== intersects[0].object) {
+      // colour the new face
+      const { mesh: mesh, body: body } = createSphere(1, undefined, undefined, 0)
+      mesh.position.copy(selected.faceCentroid)
+      body.position.copy(selected.faceCentroid)
+      return {mesh: mesh, body: body}
+    }
+  }
+}
+
+export { createSphere, linkSpheres, repelSpheres, addSeed }
 
 /*
 params.jiggleBalls = () => {

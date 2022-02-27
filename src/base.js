@@ -43,7 +43,7 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 renderer.setClearColor(0xc7fdf7) // background color
-const effect = new OutlineEffect(renderer)
+const effect = new OutlineEffect(renderer, {defaultThickness: 0.005})
 
 // Mouse
 const mouse = new THREE.Vector2()

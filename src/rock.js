@@ -4,7 +4,7 @@ import { concreteMaterial } from "./materials.js"
 import * as openSimplexNoise from "open-simplex-noise"
 
 const rockColor = 0x808487
-const selectedColor = 0xff0000
+const selectedColor = 0xff3333
 const numShades = 6
 
 const createRock = (position, radius, detail) => {
@@ -74,44 +74,81 @@ const createRock = (position, radius, detail) => {
   return { mesh: mesh, body: body }
 }
 
-const attachRaycastSelector = (rockMesh, mouse, camera) => {
-  // colour selected face
-  let selected
-  const highlightFace = color => {
-    const { face } = selected
-    const colorAttribute = selected.object.geometry.attributes.color
-    colorAttribute.setXYZ(face.a, color.r, color.g, color.b)
-    colorAttribute.setXYZ(face.b, color.r, color.g, color.b)
-    colorAttribute.setXYZ(face.c, color.r, color.g, color.b)
-    colorAttribute.needsUpdate = true
-  }
-
-  // raycast to select face
-  let intersects
-  const raycaster = new THREE.Raycaster()
-  const raycastSelector = () => {
-    raycaster.setFromCamera(mouse, camera)
-    intersects = raycaster.intersectObjects([rockMesh])
-    if (intersects.length > 0) {
-      if (selected !== intersects[0].object) {
-        // remove highlight on the currently selected face
-        if (selected) {
-          highlightFace(new THREE.Color(rockColor))
-        }
-        // select and highlight the new face
-        selected = intersects[0]
-        highlightFace(new THREE.Color(selectedColor))
-      }
-    } else {
-      // remove highlight on the currently selected face
-      if (selected) {
-        highlightFace(new THREE.Color(rockColor))
-      }
-      selected = null
-    }
-  }
-  // "click"
-  window.addEventListener("mousemove", raycastSelector)
+// colour selected face
+const colourFace = (color, selected) => {
+  const { face } = selected
+  const colorAttribute = selected.object.geometry.attributes.color
+  colorAttribute.setXYZ(face.a, color.r, color.g, color.b)
+  colorAttribute.setXYZ(face.b, color.r, color.g, color.b)
+  colorAttribute.setXYZ(face.c, color.r, color.g, color.b)
+  colorAttribute.needsUpdate = true
 }
 
-export { createRock, attachRaycastSelector }
+const removeHighlight = (selected, intersects) => {
+  // raycast is intersecting something
+  if (intersects.length > 0) {
+    // the first thing being intersected is different to the current selection
+    if (selected !== intersects[0].object) {
+      // remove colour on the currently selected face if something is already selected
+      colourFace(new THREE.Color(rockColor), selected)
+    }
+  } else {
+    // remove colour on the currently selected face
+    colourFace(new THREE.Color(rockColor), selected)
+  }
+}
+
+const addHighlight = (selected, intersects) => {
+  // raycast is intersecting something
+  if (intersects.length > 0) {
+    // the first thing being intersected is different to the current selection
+    if (selected !== intersects[0].object) {
+      // colour the new face
+      colourFace(new THREE.Color(selectedColor), selected)
+    }
+  }
+}
+
+const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) => {
+
+  // raycast to select face
+  let selected, intersects
+  const raycaster = new THREE.Raycaster()
+  const raycastSelector = () => {
+    const updateSelected = (selected, intersects) => {
+      // raycast is intersecting something
+      if (intersects.length > 0) {
+        // the first thing being intersected is different to the current selection
+        if (selected !== intersects[0].object) {
+          const testSelected = intersects[0]
+          const faceVertexA = new THREE.Vector3().fromBufferAttribute(testSelected.object.geometry.attributes.position, testSelected.face.a)
+          const faceVertexB = new THREE.Vector3().fromBufferAttribute(testSelected.object.geometry.attributes.position, testSelected.face.b)
+          const faceVertexC = new THREE.Vector3().fromBufferAttribute(testSelected.object.geometry.attributes.position, testSelected.face.c)
+          const rockPosition = new THREE.Vector3(...testSelected.object.position)
+          // face is fully above ground
+          if (faceVertexA.y > -rockPosition.y && faceVertexB.y > -rockPosition.y && faceVertexC.y > -rockPosition.y) {
+            let v = new THREE.Vector3()
+            v.add(rockPosition)
+            v.add(faceVertexA.multiplyScalar(1/3))
+            v.add(faceVertexB.multiplyScalar(1/3))
+            v.add(faceVertexC.multiplyScalar(1/3))
+            selected = testSelected
+            selected.faceCentroid = v
+          }
+        }
+      } else {
+        // nothing is being intersected
+        selected = null
+      }
+      return selected
+    }
+    raycaster.setFromCamera(mouse, camera)
+    intersects = raycaster.intersectObjects([rockMesh])
+    preAction && selected ? preAction(selected, intersects) : null
+    selected = updateSelected(selected, intersects)
+    postAction && selected ? postAction(selected, intersects) : null
+  }
+  window.addEventListener(event, raycastSelector)
+}
+
+export { createRock, attachRaycast, removeHighlight, addHighlight }
