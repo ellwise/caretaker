@@ -10,9 +10,19 @@ const params = {
   sphereVelocity: 20,
   gravity: 9.81, // positive = upwards (buoyancy)
   replicationFactor: 0.4,
+  algae: 0xffffff,
+  polyp: "",
+  polypData: undefined,
 }
-gui.add(params, "gravity", 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
-gui.add(params, "replicationFactor", 0, 1, 0.01).onChange(v => { params.replicationFactor = v })
+const developmentOptions = gui.addFolder("Developer Options")
+developmentOptions.add(params, "gravity", 0, 2 * params.gravity, 0.01).onChange(v => world.gravity.set(0, params.gravity, 0))
+developmentOptions.add(params, "replicationFactor", 0, 1, 0.01).onChange(v => { params.replicationFactor = v })
+developmentOptions.close()
+
+const inventory = gui.addFolder("Inventory")
+inventory.addColor(params, "algae")
+inventory.add(params, "polyp")
+inventory.controllers.forEach(c => c.disable())
 
 /**
  * Debug
@@ -88,7 +98,7 @@ params.growSheet = () => {
     )
   }
 }
-gui.add(params, "growSheet")
+developmentOptions.add(params, "growSheet")
 
 /*
  *  Rock
@@ -96,16 +106,80 @@ gui.add(params, "growSheet")
 const rockPosition = new THREE.Vector3(0, 5, 0)
 const rockRadius = 10
 const rockDetail = 1
-const { mesh: rockMesh, body: rockBody } = createRock(rockPosition, rockRadius, rockDetail)
+const { mesh: rockMesh, body: rockBody, faces: rockFaces } = createRock(rockPosition, rockRadius, rockDetail)
 scene.add(rockMesh)
 world.addBody(rockBody)
 registerMeshBodyPair(rockMesh, rockBody)
 attachRaycast(rockMesh, mouse, camera, "mousemove", removeHighlight, addHighlight)
 const clickHandler = (selected, intersects) => {
-  const {mesh: mesh, body: body} = addSeed(selected, intersects)
-  scene.add(mesh)
-  world.addBody(body)
-  registerMeshBodyPair(mesh, body)
+  if (rockFaces[selected.faceIndex].type === "empty") {
+    // place either coral or a polyp if empty
+    if (params.polypData !== undefined) {
+      // place the polyp from the inventory
+      params.polypData.data.mesh.position.copy(selected.faceCentroid)
+      params.polypData.data.body.position.copy(selected.faceCentroid)
+      params.polypData.data.mesh.visible = true
+      rockFaces[selected.faceIndex] = params.polypData
+      params.polypData = undefined
+      inventory.controllers[1].setValue("")
+    } else {
+      // randomly generate a coral or polyp
+      const { mesh, body, isPolyp } = addSeed(selected, intersects)
+      scene.add(mesh)
+      world.addBody(body)
+      registerMeshBodyPair(mesh, body)
+      rockFaces[selected.faceIndex] = {
+        type: isPolyp ? "polyp" : "coral",
+        data: {
+          faceIndex: selected.faceIndex,
+          mesh: mesh,
+          body: body,
+          bleached: 0,
+        },
+      }
+    }
+  } else if (rockFaces[selected.faceIndex].type === "coral") {
+    // if the face has coral
+    if (params.algae === 0xffffff) {
+      // if the inventory has no algae, partially bleach it and extract algae
+      const rgb = rockFaces[selected.faceIndex].data.mesh.material.color
+      let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
+      inventory.controllers[0].setValue(colour.getHex())
+      const hsl = {}
+      colour.getHSL(hsl)
+      if (rockFaces[selected.faceIndex].data.bleached < 1) {
+        rockFaces[selected.faceIndex].data.bleached += 0.5
+      }
+      hsl.l = hsl.l + rockFaces[selected.faceIndex].data.bleached * hsl.l // bleach
+      colour = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+      rockFaces[selected.faceIndex].data.mesh.material.color = colour
+    } else {
+      // else donate the algae to the coral - not sure this is quite right - seems to retain some colour in the algae over time
+      const rgb = rockFaces[selected.faceIndex].data.mesh.material.color
+      let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
+      const hslSelected = {}
+      colour.getHSL(hslSelected)
+      const hslAlgae = {}
+      new THREE.Color(params.algae).getHSL(hslAlgae)
+      const hsl = {
+        h: (hslSelected.h + hslAlgae.h) / 2 % 360,
+        s: (hslSelected.s + hslAlgae.s) / 2,
+        l: (hslSelected.l + hslAlgae.l) / 2,
+      }
+      colour = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+      rockFaces[selected.faceIndex].data.mesh.material.color = colour
+      inventory.controllers[0].setValue(0xffffff)
+    }
+  } else if (rockFaces[selected.faceIndex].type === "polyp") {
+    // if the face has a polyp, remove it from the face and put it into the inventory
+    if (params.polypData === undefined) {
+      // but only if the inventory is empty, otherwise do nothing
+      params.polypData = rockFaces[selected.faceIndex]
+      rockFaces[selected.faceIndex] = { type: "empty", data: undefined }
+      inventory.controllers[1].setValue(params.polypData.data.mesh.uuid) // Face ${selected.faceIndex}
+      params.polypData.data.mesh.visible = false
+    }
+  }
 }
 attachRaycast(rockMesh, mouse, camera, "click", undefined, clickHandler)
 
@@ -115,7 +189,7 @@ attachRaycast(rockMesh, mouse, camera, "click", undefined, clickHandler)
 const floorRadius = params.floorSize / 2
 const floorPosition = new THREE.Vector3(0, 0, 0)
 const floorRotation = new THREE.Vector3(-Math.PI * 0.5, 0, 0)
-const subsurfaceMesh = createSubsurface(floorPosition, floorRotation, 10*floorRadius)
+const subsurfaceMesh = createSubsurface(floorPosition, floorRotation, 10 * floorRadius)
 scene.add(subsurfaceMesh)
 const { mesh: floorMesh, body: floorBody } = createSandPatch(floorPosition, floorRotation, floorRadius)
 scene.add(floorMesh)

@@ -3,18 +3,20 @@ import * as THREE from "three"
 import { plasticMaterial } from "./materials.js"
 
 const numShades = 6
-const seedColor = 0xff3333  // hsl(0, 1, 0.6)
+const seedColor = 0xff3333 // hsl(0, 1, 0.6)
 
-const createSphere = (radius, position, rowNum, mass) => {
+const createSphere = (radius, position, rowNum, mass, colour) => {
   // geometry
   const widthSegments = 32
   const heightSegments = 32
   const geometry = new THREE.SphereGeometry(radius, widthSegments, heightSegments)
 
   // mesh
-  const colour = new THREE.Color(seedColor)
-  if (rowNum !== undefined) {
-    colour.setHSL(0.012 * rowNum % 360, 1, 0.6)
+  if (colour === undefined) {
+    colour = new THREE.Color(seedColor)
+    if (rowNum !== undefined) {
+      colour.setHSL(0.012 * rowNum % 360, 1, 0.6)
+    }
   }
   const shades = new Uint8Array(numShades)
   for (let j = 0; j <= shades.length; j++) {
@@ -73,10 +75,14 @@ const addSeed = (selected, intersects) => {
     // the first thing being intersected is different to the current selection
     if (selected !== intersects[0].object) {
       // colour the new face
-      const { mesh: mesh, body: body } = createSphere(1, undefined, undefined, 0)
+      const colour = new THREE.Color(seedColor)
+      colour.setHSL(Math.random(), 1, 0.6)
+      const isPolyp = Math.random() > 0.5
+      const radius = isPolyp ? 0.5 : 1
+      const { mesh, body } = createSphere(radius, undefined, undefined, 0, colour)
       mesh.position.copy(selected.faceCentroid)
       body.position.copy(selected.faceCentroid)
-      return {mesh: mesh, body: body}
+      return { mesh: mesh, body: body, isPolyp: isPolyp }
     }
   }
 }
