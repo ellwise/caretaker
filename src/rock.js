@@ -7,26 +7,28 @@ const rockColor = 0x808487
 const selectedColor = 0xff3333
 const numShades = 6
 
+const epoch = new Date(Date.now()) // milliseconds
+const seed = new Date(epoch.getFullYear(), epoch.getMonth(), epoch.getDate())
+
 const createRock = (position, radius, detail) => {
   // geometry - nb: BufferGeometry is already non-indexed (i.e. faces don't share vertices)
-  const geometry = new THREE.IcosahedronGeometry(1, detail)  // radius has no effect here?
+  const geometry = new THREE.IcosahedronGeometry(1, detail) // radius has no effect here?
 
   // deform geometry
-  let nPos = []
-  let v3 = new THREE.Vector3()
-  for (let j=0; j<geometry.attributes.position.count; j++){
+  const nPos = []
+  const v3 = new THREE.Vector3()
+  for (let j = 0; j < geometry.attributes.position.count; j++) {
     v3.fromBufferAttribute(geometry.attributes.position, j).normalize()
     nPos.push(v3.clone())
   }
   geometry.userData.nPos = nPos
-  let seed = Date.now()
-  let noise = openSimplexNoise.makeNoise3D(seed)
+  const noise = openSimplexNoise.makeNoise3D(seed)
   geometry.userData.nPos.forEach(
     (p, j) => {
-      let ns = noise(p.x, p.y, p.z) * 0.75
+      const ns = noise(p.x, p.y, p.z) * 0.75
       v3.copy(p).multiplyScalar(radius).addScaledVector(p, ns * radius)
       geometry.attributes.position.setXYZ(j, v3.x, v3.y, v3.z)
-    }
+    },
   )
   geometry.computeVertexNormals()
   geometry.attributes.position.needsUpdate = true
@@ -50,7 +52,7 @@ const createRock = (position, radius, detail) => {
   // mesh
   const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradientMap })
   const mesh = new THREE.Mesh(geometry, material)
-  //mesh.castShadow = true
+  // mesh.castShadow = true
   mesh.receiveShadow = true
   mesh.position.set(...position)
 
@@ -71,7 +73,13 @@ const createRock = (position, radius, detail) => {
   body.material = concreteMaterial // adding this after creation sets collisionResponse to true?
   body.position.set(...position)
 
-  return { mesh: mesh, body: body }
+  // face data
+  const faces = []
+  for (let j = 0; j < geometryVertices.length; j += 3) {
+    faces.push({ type: "empty", data: undefined })
+  }
+
+  return { mesh: mesh, body: body, faces: faces }
 }
 
 // colour selected face
@@ -110,7 +118,6 @@ const addHighlight = (selected, intersects) => {
 }
 
 const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) => {
-
   // raycast to select face
   let selected, intersects
   const raycaster = new THREE.Raycaster()
@@ -127,11 +134,11 @@ const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) =>
           const rockPosition = new THREE.Vector3(...testSelected.object.position)
           // face is fully above ground
           if (faceVertexA.y > -rockPosition.y && faceVertexB.y > -rockPosition.y && faceVertexC.y > -rockPosition.y) {
-            let v = new THREE.Vector3()
+            const v = new THREE.Vector3()
             v.add(rockPosition)
-            v.add(faceVertexA.multiplyScalar(1/3))
-            v.add(faceVertexB.multiplyScalar(1/3))
-            v.add(faceVertexC.multiplyScalar(1/3))
+            v.add(faceVertexA.multiplyScalar(1 / 3))
+            v.add(faceVertexB.multiplyScalar(1 / 3))
+            v.add(faceVertexC.multiplyScalar(1 / 3))
             selected = testSelected
             selected.faceCentroid = v
           }
@@ -144,9 +151,9 @@ const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) =>
     }
     raycaster.setFromCamera(mouse, camera)
     intersects = raycaster.intersectObjects([rockMesh])
-    preAction && selected ? preAction(selected, intersects) : null
+    if (preAction && selected) { preAction(selected, intersects) }
     selected = updateSelected(selected, intersects)
-    postAction && selected ? postAction(selected, intersects) : null
+    if (postAction && selected) { postAction(selected, intersects) }
   }
   window.addEventListener(event, raycastSelector)
 }
