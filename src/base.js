@@ -18,9 +18,12 @@ const stats = new Stats()
 document.body.appendChild(stats.dom)
 
 // Scene
+const backgroundColour = 0xc7fdf7
 const scene = new THREE.Scene()
 const axes = new THREE.AxesHelper(10)
 scene.add(axes)
+scene.fog = new THREE.FogExp2(backgroundColour, 0.004) // 150, 200);
+scene.background = new THREE.Color(backgroundColour)
 
 // Base camera
 const camera = new THREE.PerspectiveCamera(27, sizes.width / sizes.height, 0.1, 500)
@@ -32,13 +35,12 @@ const controls = new OrbitControls(camera, canvas)
 controls.target = new Vector3(0, 5, 0)
 controls.enableDamping = true
 controls.enablePan = false
-controls.minPolarAngle = - Math.PI / 2
+controls.minPolarAngle = -Math.PI / 2
 controls.maxPolarAngle = Math.PI / 2
 controls.minDistance = 30
 controls.maxDistance = 150
 
 // Renderer
-const backgroundColour = 0xc7fdf7
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
   antialias: true,
@@ -47,8 +49,7 @@ renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-renderer.setClearColor(backgroundColour) // background color
-const effect = new OutlineEffect(renderer, {defaultThickness: 0.005})
+const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 })
 
 // Mouse
 const mouse = new THREE.Vector2()
