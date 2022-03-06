@@ -5,9 +5,12 @@
 Game mechanics
 - [x] Make rock more rock-like (deform vertices, maybe join tris into quads)
 - [x] Attach coral (coloured sphere) to empty selected face
-- [ ] Place selected coral into an inventory
-- [ ] Breed coral onto an empty face
-- [ ] Bleach and kill coral over time
+- [x] Place selected polyp into an inventory
+- [x] Shift polyp onto an empty face
+- [x] Extract algae from coral (and partially bleach)
+- [x] Impant algae into coral
+- [ ] Bleach and remove coral over time
+- [ ] Grow polyps over time
 - [ ] Add a scoring mechanism
 
 Visuals

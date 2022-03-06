@@ -1,6 +1,7 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
-import { plasticMaterial } from "./materials.js"
+import { plasticMaterial } from "./utils/materials.js"
+import { MeshBody } from "./utils/MeshBody.js"
 
 const numShades = 6
 const seedColor = 0xff3333 // hsl(0, 1, 0.6)
@@ -26,9 +27,9 @@ const createSphere = (radius, position, rowNum, mass, colour) => {
   gradientMap.needsUpdate = true
   const material = new THREE.MeshToonMaterial({ color: colour, gradientMap: gradientMap })
   const mesh = new THREE.Mesh(geometry, material)
-  mesh.castShadow = false
+  mesh.castShadow = true
   if (position === undefined) {
-    mesh.position.set(0, 15, 0)
+    mesh.position.set(0, 25, 0)
   } else {
     mesh.position.set(position.x, position.y + 2 * radius, position.z)
   }
@@ -117,3 +118,20 @@ params.growBalls = () => {
 gui.add(params, "growBalls")
 params.growBalls()
 */
+
+
+
+/*
+class Coral {
+  constructor(params) {
+    this.params = {...params}  // shallow copy
+    this.params.algae = // mutate algae
+    // this.params mutates from params
+    // age so we know when to bleach it, breed it, etc
+    // start as a polyp
+  }
+  grow() {}  // run a simulation then freeze mesh/body
+  update() {}  // grow at a certain age, respond to environment
+}
+*/
+

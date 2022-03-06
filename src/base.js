@@ -5,7 +5,10 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { OutlineEffect } from "three/examples/jsm/effects/OutlineEffect.js"
 import Stats from "three/examples/jsm/libs/stats.module.js"
 import { Vector3 } from "three"
-import { concretePlasticContact, defaultDefaultContact, plasticPlasticContact } from "./materials.js"
+import { concretePlasticContact, defaultDefaultContact, plasticPlasticContact } from "./utils/materials.js"
+import { horizon } from "./parameters.js"
+import {water0, water1, water2, water3, water4} from "./utils/colours.js"
+
 
 const sizes = {
   width: window.innerWidth,
@@ -13,26 +16,25 @@ const sizes = {
 }
 const canvas = document.querySelector("canvas.webgl")
 
+
 // Stats
 const stats = new Stats()
 document.body.appendChild(stats.dom)
 
 // Scene
-const backgroundColour = 0xc7fdf7
 const scene = new THREE.Scene()
-const axes = new THREE.AxesHelper(10)
-scene.add(axes)
-scene.fog = new THREE.FogExp2(backgroundColour, 0.004) // 150, 200);
-scene.background = new THREE.Color(backgroundColour)
+scene.fog = new THREE.FogExp2(water0, 0.01)
+scene.background = new THREE.Color(water0)
+//scene.add(new THREE.AxesHelper(10))
 
 // Base camera
-const camera = new THREE.PerspectiveCamera(27, sizes.width / sizes.height, 0.1, 500)
+const camera = new THREE.PerspectiveCamera(27, sizes.width / sizes.height, 0.1, 2 * horizon)
 camera.position.set(-60, 30, 60)
 scene.add(camera)
 
 // Controls
 const controls = new OrbitControls(camera, canvas)
-controls.target = new Vector3(0, 5, 0)
+controls.target = new Vector3(0, 10, 0)
 controls.enableDamping = true
 controls.enablePan = false
 controls.minPolarAngle = -Math.PI / 2
@@ -43,12 +45,14 @@ controls.maxDistance = 150
 // Renderer
 const renderer = new THREE.WebGLRenderer({
   canvas: canvas,
-  antialias: true,
+  antialias: true, // no effect on post-processing pipelines?
 })
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+// renderer.toneMapping = THREE.CineonToneMapping
+//renderer.toneMappingExposure = 10
 const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 })
 
 // Mouse
@@ -73,10 +77,6 @@ window.addEventListener("resize", () => {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 })
 
-// Lights
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5)
-scene.add(ambientLight)
-
 // Physics World
 const world = new CANNON.World()
 world.broadphase = new CANNON.SAPBroadphase(world) // GridBroadphase(world)  //
@@ -92,4 +92,4 @@ world.defaultContactMaterial = defaultDefaultContact
 // GUI for debugging things
 const gui = new dat.GUI()
 
-export { camera, controls, effect, gui, mouse, scene, stats, world }
+export { camera, controls, gui, mouse, scene, stats, world, renderer, effect }

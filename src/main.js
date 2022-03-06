@@ -1,9 +1,14 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
-import { camera, controls, effect, gui, mouse, scene, stats, world } from "./base.js"
+import { camera, controls, gui, mouse, scene, stats, world, effect } from "./base.js"
+import { updateLighting } from "./lighting.js"
+//import { composer, updateSun } from "./postprocessing.js"
+//import { refractor, updateRefractor } from "./refractor.js"
+//import { updateRefractor } from "./sea.js"
 import { createSphere, linkSpheres, repelSpheres, addSeed } from "./coral.js"
-import { createRock, attachRaycast, removeHighlight, addHighlight } from "./rock.js"
-import { createSubsurface, createSandPatch } from "./sand.js"
+import { meshbody as rockPair, faces as rockFaces, attachRaycast, removeHighlight, addHighlight } from "./rock.js"
+import { pair as groundPair } from "./sand.js"
+import { MeshBody } from "./utils/MeshBody.js"
 
 const params = {
   floorSize: 50,
@@ -33,8 +38,8 @@ world.gravity.set(0, params.gravity, 0) // si earth gravity
 /**
  * Update List
  */
-const registeredMeshesBodies = []
-const registerMeshBodyPair = (mesh, body) => registeredMeshesBodies.push({ mesh: mesh, body: body })
+const updateList = []
+const registerMeshBodyPair = (pair) => updateList.push(pair)
 
 /**
  * Spheres
@@ -45,9 +50,12 @@ const spheres = [[]]
 const radius = 1
 for (let j = 0; j < 5; j++) {
   spheres[0].push(createSphere(radius))
-  scene.add(spheres[0][j].mesh)
-  world.addBody(spheres[0][j].body)
-  registerMeshBodyPair(spheres[0][j].mesh, spheres[0][j].body)
+  const pair = new MeshBody(spheres[0][j].mesh, spheres[0][j].body)
+  pair.addTo(scene, world)
+  registerMeshBodyPair(pair)
+  //scene.add(spheres[0][j].mesh)
+  //world.addBody(spheres[0][j].body)
+  //registerMeshBodyPair(spheres[0][j].mesh, spheres[0][j].body)
 }
 
 // link first row
@@ -68,9 +76,12 @@ params.growSheet = () => {
           spheres.length,
         ),
       )
-      scene.add(newSpheres[newSpheres.length - 1].mesh)
-      world.addBody(newSpheres[newSpheres.length - 1].body)
-      registerMeshBodyPair(newSpheres[newSpheres.length - 1].mesh, newSpheres[newSpheres.length - 1].body)
+      const pair = new MeshBody(newSpheres[newSpheres.length - 1].mesh, newSpheres[newSpheres.length - 1].body)
+      pair.addTo(scene, world)
+      registerMeshBodyPair(pair)
+      //scene.add(newSpheres[newSpheres.length - 1].mesh)
+      //world.addBody(newSpheres[newSpheres.length - 1].body)
+      //registerMeshBodyPair(newSpheres[newSpheres.length - 1].mesh, newSpheres[newSpheres.length - 1].body)
       linkSpheres(
         spheres[spheres.length - 1][j].body,
         newSpheres[newSpheres.length - 1].body,
@@ -103,15 +114,13 @@ developmentOptions.add(params, "growSheet")
 /*
  *  Rock
  */
-const rockPosition = new THREE.Vector3(0, 5, 0)
-const rockRadius = 10
-const rockDetail = 1
-const { mesh: rockMesh, body: rockBody, faces: rockFaces } = createRock(rockPosition, rockRadius, rockDetail)
-scene.add(rockMesh)
-world.addBody(rockBody)
-registerMeshBodyPair(rockMesh, rockBody)
-attachRaycast(rockMesh, mouse, camera, "mousemove", removeHighlight, addHighlight)
+registerMeshBodyPair(rockPair)
+//scene.add(rockMesh)
+//world.addBody(rockBody)
+//registerMeshBodyPair(rockMesh, rockBody)
+attachRaycast(rockPair.mesh, mouse, camera, "mousemove", removeHighlight, addHighlight)
 const clickHandler = (selected, intersects) => {
+  console.log(selected.faceIndex)
   if (rockFaces[selected.faceIndex].type === "empty") {
     // place either coral or a polyp if empty
     if (params.polypData !== undefined) {
@@ -125,17 +134,18 @@ const clickHandler = (selected, intersects) => {
     } else {
       // randomly generate a coral or polyp
       const { mesh, body, isPolyp } = addSeed(selected, intersects)
-      scene.add(mesh)
-      world.addBody(body)
-      registerMeshBodyPair(mesh, body)
-      rockFaces[selected.faceIndex] = {
-        type: isPolyp ? "polyp" : "coral",
-        data: {
-          faceIndex: selected.faceIndex,
-          mesh: mesh,
-          body: body,
-          bleached: 0,
-        },
+      const pair = new MeshBody(mesh, body)
+      pair.addTo(scene, world)
+      registerMeshBodyPair(pair)
+      //scene.add(mesh)
+      //world.addBody(body)
+      //registerMeshBodyPair(mesh, body)
+      rockFaces[selected.faceIndex].type = isPolyp ? "polyp" : "coral"
+      rockFaces[selected.faceIndex].data = {
+        faceIndex: selected.faceIndex,
+        mesh: mesh,
+        body: body,
+        bleached: 0,  // 58. 78, 86, 202
       }
     }
   } else if (rockFaces[selected.faceIndex].type === "coral") {
@@ -145,28 +155,16 @@ const clickHandler = (selected, intersects) => {
       const rgb = rockFaces[selected.faceIndex].data.mesh.material.color
       let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
       inventory.controllers[0].setValue(colour.getHex())
-      const hsl = {}
-      colour.getHSL(hsl)
       if (rockFaces[selected.faceIndex].data.bleached < 1) {
         rockFaces[selected.faceIndex].data.bleached += 0.5
       }
-      hsl.l = hsl.l + rockFaces[selected.faceIndex].data.bleached * hsl.l // bleach
-      colour = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+      colour.lerpHSL(new THREE.Color(0xffffff), rockFaces[selected.faceIndex].data.bleached)  // bleach
       rockFaces[selected.faceIndex].data.mesh.material.color = colour
     } else {
       // else donate the algae to the coral - not sure this is quite right - seems to retain some colour in the algae over time
       const rgb = rockFaces[selected.faceIndex].data.mesh.material.color
       let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
-      const hslSelected = {}
-      colour.getHSL(hslSelected)
-      const hslAlgae = {}
-      new THREE.Color(params.algae).getHSL(hslAlgae)
-      const hsl = {
-        h: (hslSelected.h + hslAlgae.h) / 2 % 360,
-        s: (hslSelected.s + hslAlgae.s) / 2,
-        l: (hslSelected.l + hslAlgae.l) / 2,
-      }
-      colour = new THREE.Color().setHSL(hsl.h, hsl.s, hsl.l)
+      colour.lerpHSL(new THREE.Color(params.algae), 0.5)
       rockFaces[selected.faceIndex].data.mesh.material.color = colour
       inventory.controllers[0].setValue(0xffffff)
     }
@@ -181,19 +179,8 @@ const clickHandler = (selected, intersects) => {
     }
   }
 }
-attachRaycast(rockMesh, mouse, camera, "click", undefined, clickHandler)
+attachRaycast(rockPair.mesh, mouse, camera, "click", undefined, clickHandler)
 
-/**
- * Floor
- */
-const floorRadius = params.floorSize / 2
-const floorPosition = new THREE.Vector3(0, 0, 0)
-const floorRotation = new THREE.Vector3(-Math.PI * 0.5, 0, 0)
-const subsurfaceMesh = createSubsurface(floorPosition, floorRotation, 10 * floorRadius)
-scene.add(subsurfaceMesh)
-const { mesh: floorMesh, body: floorBody } = createSandPatch(floorPosition, floorRotation, floorRadius)
-scene.add(floorMesh)
-world.addBody(floorBody)
 
 /*
  *  Constrain coral to floor
@@ -203,38 +190,12 @@ for (let j = 0; j < spheres[0].length; j += 2) {
     new CANNON.PointToPointConstraint(
       spheres[0][j].body,
       new CANNON.Vec3(0, -1, 0),
-      floorBody,
-      new CANNON.Vec3(1.2 * (2 * j - 4), 15, 0),
+      groundPair.body,
+      new CANNON.Vec3(1.2 * (2 * j - 4), 25, 0),
     ),
   )
 }
 
-/*
- *  Lighting
- */
-
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9)
-directionalLight.castShadow = true
-directionalLight.shadow.mapSize.set(1024, 1024)
-directionalLight.shadow.camera.far = 100 // needs to correspond to distance I want shadows to reach? i.e. floorSize?
-directionalLight.shadow.camera.left = -params.floorSize * 0.6
-directionalLight.shadow.camera.top = params.floorSize * 0.6
-directionalLight.shadow.camera.right = params.floorSize * 0.6
-directionalLight.shadow.camera.bottom = -params.floorSize * 0.6
-directionalLight.position.set(5, 5, 5)
-
-scene.add(directionalLight.target)
-scene.add(directionalLight)
-directionalLight.position.set(
-  params.floorSize / 2,
-  params.floorSize / 2,
-  params.floorSize / 2,
-)
-directionalLight.target.position.set(
-  directionalLight.target.position.x,
-  directionalLight.target.position.y,
-  directionalLight.target.position.z,
-)
 
 /**
  * Animate
@@ -242,16 +203,22 @@ directionalLight.target.position.set(
 const clock = new THREE.Clock()
 const tick = () => {
   const delta = clock.getDelta()
-  // const elapsedTime = clock.getElapsedTime()
+  const elapsedTime = clock.getElapsedTime()
 
   // Physics Update
   world.step(1 / 75, delta, 5)
 
-  // Update Meshes
-  for (const pair of registeredMeshesBodies) {
-    pair.mesh.position.copy(pair.body.position)
-    pair.mesh.quaternion.copy(pair.body.quaternion)
+  //updateRefractor(elapsedTime)
+  //refractor.position.copy(camera.position)
+
+  // Update Meshes to match Bodies
+  for (const pair of updateList) {
+    pair.update()
   }
+
+  // Update Lighting
+  updateLighting(elapsedTime)
+  //updateSun(elapsedTime)
 
   // Update controls
   controls.update()

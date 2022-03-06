@@ -1,39 +1,42 @@
 import * as CANNON from "cannon-es"
 import * as THREE from "three"
-import { concreteMaterial } from "./materials.js"
-import * as openSimplexNoise from "open-simplex-noise"
+import { concreteMaterial } from "./utils/materials.js"
+import { noise3 } from "./utils/random.js"
+import {stone8 as rockColour, selectedColour} from "./utils/colours.js"
+import { MeshBody } from "./utils/MeshBody.js"
+import { scene, world } from "./base.js"
+import { rockHeight } from "./parameters.js"
+import { faceAdjacency } from "./utils/geometry.js"
 
-const rockColor = 0x808487
-const selectedColor = 0xff3333
+
 const numShades = 6
+const rockRadius = 10
+const rockDetail = 1
 
-const epoch = new Date(Date.now()) // milliseconds
-const seed = new Date(epoch.getFullYear(), epoch.getMonth(), epoch.getDate())
+const createRock = (radius, detail) => {
 
-const createRock = (position, radius, detail) => {
   // geometry - nb: BufferGeometry is already non-indexed (i.e. faces don't share vertices)
   const geometry = new THREE.IcosahedronGeometry(1, detail) // radius has no effect here?
 
   // deform geometry
-  const nPos = []
-  const v3 = new THREE.Vector3()
+  let nPos = []
+  let v3 = new THREE.Vector3()
   for (let j = 0; j < geometry.attributes.position.count; j++) {
     v3.fromBufferAttribute(geometry.attributes.position, j).normalize()
     nPos.push(v3.clone())
   }
   geometry.userData.nPos = nPos
-  const noise = openSimplexNoise.makeNoise3D(seed)
   geometry.userData.nPos.forEach(
     (p, j) => {
-      const ns = noise(p.x, p.y, p.z) * 0.75
+      const ns = noise3(p.x, p.y, p.z) * 0.75
       v3.copy(p).multiplyScalar(radius).addScaledVector(p, ns * radius)
       geometry.attributes.position.setXYZ(j, v3.x, v3.y, v3.z)
     },
   )
   geometry.computeVertexNormals()
-  geometry.attributes.position.needsUpdate = true
+  //geometry.attributes.position.needsUpdate = true
 
-  // face colouring
+  // ensure faces can be coloured individually
   const shades = new Uint8Array(numShades)
   for (let j = 0; j <= shades.length; j++) {
     shades[j] = (j / shades.length) * 256
@@ -42,7 +45,7 @@ const createRock = (position, radius, detail) => {
   gradientMap.needsUpdate = true
   const colors = []
   for (let j = 0; j < geometry.attributes.position.count; j += 3) {
-    const color = new THREE.Color(rockColor)
+    const color = new THREE.Color(rockColour)
     colors.push(color.r, color.g, color.b)
     colors.push(color.r, color.g, color.b)
     colors.push(color.r, color.g, color.b)
@@ -52,9 +55,9 @@ const createRock = (position, radius, detail) => {
   // mesh
   const material = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: gradientMap })
   const mesh = new THREE.Mesh(geometry, material)
-  // mesh.castShadow = true
-  mesh.receiveShadow = true
-  mesh.position.set(...position)
+  mesh.castShadow = true
+  mesh.receiveShadow = false // prevent self-shadow artefacts
+  mesh.position.set(0, rockHeight, 0)
 
   // shape
   const geometryVertices = geometry.attributes.position.array
@@ -71,53 +74,62 @@ const createRock = (position, radius, detail) => {
   // body
   const body = new CANNON.Body({ mass: 0, shape: shape }) // unaffected by gravity
   body.material = concreteMaterial // adding this after creation sets collisionResponse to true?
-  body.position.set(...position)
+  body.position.copy(mesh.position)
 
-  // face data
-  const faces = []
-  for (let j = 0; j < geometryVertices.length; j += 3) {
-    faces.push({ type: "empty", data: undefined })
-  }
-
-  return { mesh: mesh, body: body, faces: faces }
+  return new MeshBody(mesh, body)
 }
 
+// create a single rock
+export const meshbody = createRock(rockRadius, rockDetail)
+meshbody.addTo(scene, world)
+
+// face data
+export const faces = []
+const numVertices = meshbody.mesh.geometry.attributes.position.array.length
+for (let j = 0; j < numVertices; j += 3) {
+  faces.push({ type: "empty", data: undefined })
+}
+const adjacentIndexes = faceAdjacency(meshbody.mesh.geometry)
+for (let j=0; j < faces.length; j++) {
+  faces[j].neighbours = adjacentIndexes[j]
+}
+
+
 // colour selected face
-const colourFace = (color, selected) => {
-  const { face } = selected
+const colourFace = (selected, color) => {
   const colorAttribute = selected.object.geometry.attributes.color
-  colorAttribute.setXYZ(face.a, color.r, color.g, color.b)
-  colorAttribute.setXYZ(face.b, color.r, color.g, color.b)
-  colorAttribute.setXYZ(face.c, color.r, color.g, color.b)
+  colorAttribute.setXYZ(selected.face.a, color.r, color.g, color.b)
+  colorAttribute.setXYZ(selected.face.b, color.r, color.g, color.b)
+  colorAttribute.setXYZ(selected.face.c, color.r, color.g, color.b)
   colorAttribute.needsUpdate = true
 }
 
-const removeHighlight = (selected, intersects) => {
+export const removeHighlight = (selected, intersects) => {
   // raycast is intersecting something
   if (intersects.length > 0) {
     // the first thing being intersected is different to the current selection
     if (selected !== intersects[0].object) {
       // remove colour on the currently selected face if something is already selected
-      colourFace(new THREE.Color(rockColor), selected)
+      colourFace(selected, new THREE.Color(rockColour))
     }
   } else {
     // remove colour on the currently selected face
-    colourFace(new THREE.Color(rockColor), selected)
+    colourFace(selected, new THREE.Color(rockColour))
   }
 }
 
-const addHighlight = (selected, intersects) => {
+export const addHighlight = (selected, intersects) => {
   // raycast is intersecting something
   if (intersects.length > 0) {
     // the first thing being intersected is different to the current selection
     if (selected !== intersects[0].object) {
       // colour the new face
-      colourFace(new THREE.Color(selectedColor), selected)
+      colourFace(selected, new THREE.Color(selectedColour))
     }
   }
 }
 
-const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) => {
+export const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) => {
   // raycast to select face
   let selected, intersects
   const raycaster = new THREE.Raycaster()
@@ -157,5 +169,3 @@ const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) =>
   }
   window.addEventListener(event, raycastSelector)
 }
-
-export { createRock, attachRaycast, removeHighlight, addHighlight }
