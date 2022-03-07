@@ -7,7 +7,7 @@ export class MeshBody {
         scene.add(this.mesh)
         world.addBody(this.body)
     }
-    update() {
+    synchronise() {
         this.mesh.position.copy(this.body.position)
         this.mesh.quaternion.copy(this.body.quaternion)
     }

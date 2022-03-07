@@ -9,7 +9,9 @@ import { createSphere, linkSpheres, repelSpheres, addSeed } from "./coral.js"
 import { meshbody as rockPair, faces as rockFaces, attachRaycast, removeHighlight, addHighlight } from "./rock.js"
 import { pair as groundPair } from "./sand.js"
 import { MeshBody } from "./utils/MeshBody.js"
+import { Coral } from "./coral.js"
 
+let elapsedTime
 const params = {
   floorSize: 50,
   sphereVelocity: 20,
@@ -53,9 +55,6 @@ for (let j = 0; j < 5; j++) {
   const pair = new MeshBody(spheres[0][j].mesh, spheres[0][j].body)
   pair.addTo(scene, world)
   registerMeshBodyPair(pair)
-  //scene.add(spheres[0][j].mesh)
-  //world.addBody(spheres[0][j].body)
-  //registerMeshBodyPair(spheres[0][j].mesh, spheres[0][j].body)
 }
 
 // link first row
@@ -79,9 +78,6 @@ params.growSheet = () => {
       const pair = new MeshBody(newSpheres[newSpheres.length - 1].mesh, newSpheres[newSpheres.length - 1].body)
       pair.addTo(scene, world)
       registerMeshBodyPair(pair)
-      //scene.add(newSpheres[newSpheres.length - 1].mesh)
-      //world.addBody(newSpheres[newSpheres.length - 1].body)
-      //registerMeshBodyPair(newSpheres[newSpheres.length - 1].mesh, newSpheres[newSpheres.length - 1].body)
       linkSpheres(
         spheres[spheres.length - 1][j].body,
         newSpheres[newSpheres.length - 1].body,
@@ -115,67 +111,56 @@ developmentOptions.add(params, "growSheet")
  *  Rock
  */
 registerMeshBodyPair(rockPair)
-//scene.add(rockMesh)
-//world.addBody(rockBody)
-//registerMeshBodyPair(rockMesh, rockBody)
 attachRaycast(rockPair.mesh, mouse, camera, "mousemove", removeHighlight, addHighlight)
 const clickHandler = (selected, intersects) => {
   console.log(selected.faceIndex)
-  if (rockFaces[selected.faceIndex].type === "empty") {
+  if (rockFaces[selected.faceIndex].data === undefined) {
     // place either coral or a polyp if empty
     if (params.polypData !== undefined) {
       // place the polyp from the inventory
-      params.polypData.data.mesh.position.copy(selected.faceCentroid)
-      params.polypData.data.body.position.copy(selected.faceCentroid)
-      params.polypData.data.mesh.visible = true
+      params.polypData.data.meshbody.mesh.position.copy(selected.faceCentroid)
+      params.polypData.data.meshbody.body.position.copy(selected.faceCentroid)
+      params.polypData.data.meshbody.mesh.visible = true
       rockFaces[selected.faceIndex] = params.polypData
       params.polypData = undefined
       inventory.controllers[1].setValue("")
     } else {
       // randomly generate a coral or polyp
-      const { mesh, body, isPolyp } = addSeed(selected, intersects)
+      /*const { mesh, body, isPolyp } = addSeed(selected, intersects)
       const pair = new MeshBody(mesh, body)
       pair.addTo(scene, world)
-      registerMeshBodyPair(pair)
-      //scene.add(mesh)
-      //world.addBody(body)
-      //registerMeshBodyPair(mesh, body)
-      rockFaces[selected.faceIndex].type = isPolyp ? "polyp" : "coral"
-      rockFaces[selected.faceIndex].data = {
-        faceIndex: selected.faceIndex,
-        mesh: mesh,
-        body: body,
-        bleached: 0,  // 58. 78, 86, 202
-      }
+      */
+      rockFaces[selected.faceIndex].data = new Coral(elapsedTime, selected, intersects)
+      registerMeshBodyPair(rockFaces[selected.faceIndex].data.meshbody)
     }
-  } else if (rockFaces[selected.faceIndex].type === "coral") {
+  } else if (!rockFaces[selected.faceIndex].data.isPolyp) {
     // if the face has coral
     if (params.algae === 0xffffff) {
       // if the inventory has no algae, partially bleach it and extract algae
-      const rgb = rockFaces[selected.faceIndex].data.mesh.material.color
+      const rgb = rockFaces[selected.faceIndex].data.meshbody.mesh.material.color
       let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
       inventory.controllers[0].setValue(colour.getHex())
       if (rockFaces[selected.faceIndex].data.bleached < 1) {
         rockFaces[selected.faceIndex].data.bleached += 0.5
       }
       colour.lerpHSL(new THREE.Color(0xffffff), rockFaces[selected.faceIndex].data.bleached)  // bleach
-      rockFaces[selected.faceIndex].data.mesh.material.color = colour
+      rockFaces[selected.faceIndex].data.meshbody.mesh.material.color = colour
     } else {
       // else donate the algae to the coral - not sure this is quite right - seems to retain some colour in the algae over time
-      const rgb = rockFaces[selected.faceIndex].data.mesh.material.color
+      const rgb = rockFaces[selected.faceIndex].data.meshbody.mesh.material.color
       let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
       colour.lerpHSL(new THREE.Color(params.algae), 0.5)
-      rockFaces[selected.faceIndex].data.mesh.material.color = colour
+      rockFaces[selected.faceIndex].data.meshbody.mesh.material.color = colour
       inventory.controllers[0].setValue(0xffffff)
     }
-  } else if (rockFaces[selected.faceIndex].type === "polyp") {
+  } else if (rockFaces[selected.faceIndex].data.isPolyp) {
     // if the face has a polyp, remove it from the face and put it into the inventory
     if (params.polypData === undefined) {
       // but only if the inventory is empty, otherwise do nothing
       params.polypData = rockFaces[selected.faceIndex]
       rockFaces[selected.faceIndex] = { type: "empty", data: undefined }
-      inventory.controllers[1].setValue(params.polypData.data.mesh.uuid) // Face ${selected.faceIndex}
-      params.polypData.data.mesh.visible = false
+      inventory.controllers[1].setValue(params.polypData.data.meshbody.mesh.uuid) // Face ${selected.faceIndex}
+      params.polypData.data.meshbody.mesh.visible = false
     }
   }
 }
@@ -203,7 +188,7 @@ for (let j = 0; j < spheres[0].length; j += 2) {
 const clock = new THREE.Clock()
 const tick = () => {
   const delta = clock.getDelta()
-  const elapsedTime = clock.getElapsedTime()
+  elapsedTime = clock.getElapsedTime()
 
   // Physics Update
   world.step(1 / 75, delta, 5)
@@ -213,12 +198,19 @@ const tick = () => {
 
   // Update Meshes to match Bodies
   for (const pair of updateList) {
-    pair.update()
+    pair.synchronise()
   }
 
   // Update Lighting
   updateLighting(elapsedTime)
   //updateSun(elapsedTime)
+
+  // Update coral
+  for (let face of rockFaces) {
+    if (face.data !== undefined) {
+      face.data.update(elapsedTime)
+    }
+  }
 
   // Update controls
   controls.update()

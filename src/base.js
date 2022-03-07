@@ -6,11 +6,11 @@ import { OutlineEffect } from "three/examples/jsm/effects/OutlineEffect.js"
 import Stats from "three/examples/jsm/libs/stats.module.js"
 import { Vector3 } from "three"
 import { concretePlasticContact, defaultDefaultContact, plasticPlasticContact } from "./utils/materials.js"
-import { horizon } from "./parameters.js"
+import { horizon, showHelpers } from "./parameters.js"
 import {water0, water1, water2, water3, water4} from "./utils/colours.js"
 
 
-const sizes = {
+export const sizes = {
   width: window.innerWidth,
   height: window.innerHeight,
 }
@@ -23,9 +23,9 @@ document.body.appendChild(stats.dom)
 
 // Scene
 const scene = new THREE.Scene()
-scene.fog = new THREE.FogExp2(water0, 0.01)
+scene.fog = new THREE.FogExp2(water0, 0.006)
 scene.background = new THREE.Color(water0)
-//scene.add(new THREE.AxesHelper(10))
+showHelpers ? scene.add(new THREE.AxesHelper(10)) : null
 
 // Base camera
 const camera = new THREE.PerspectiveCamera(27, sizes.width / sizes.height, 0.1, 2 * horizon)
@@ -53,7 +53,7 @@ renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 // renderer.toneMapping = THREE.CineonToneMapping
 //renderer.toneMappingExposure = 10
-const effect = new OutlineEffect(renderer, { defaultThickness: 0.005 })
+const effect = new OutlineEffect(renderer, { defaultThickness: 0 })//0.005 })
 
 // Mouse
 const mouse = new THREE.Vector2()

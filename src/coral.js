@@ -2,6 +2,7 @@ import * as CANNON from "cannon-es"
 import * as THREE from "three"
 import { plasticMaterial } from "./utils/materials.js"
 import { MeshBody } from "./utils/MeshBody.js"
+import { scene, world } from "./base.js"
 
 const numShades = 6
 const seedColor = 0xff3333 // hsl(0, 1, 0.6)
@@ -78,7 +79,7 @@ const addSeed = (selected, intersects) => {
       // colour the new face
       const colour = new THREE.Color(seedColor)
       colour.setHSL(Math.random(), 1, 0.6)
-      const isPolyp = Math.random() > 0.5
+      const isPolyp = true  // Math.random() > 0.5
       const radius = isPolyp ? 0.5 : 1
       const { mesh, body } = createSphere(radius, undefined, undefined, 0, colour)
       mesh.position.copy(selected.faceCentroid)
@@ -120,18 +121,44 @@ params.growBalls()
 */
 
 
+const transitionAge = 10
 
-/*
-class Coral {
-  constructor(params) {
-    this.params = {...params}  // shallow copy
-    this.params.algae = // mutate algae
-    // this.params mutates from params
-    // age so we know when to bleach it, breed it, etc
-    // start as a polyp
+export class Coral {
+  constructor(t, selected, intersects) {
+    this.birth = t
+    this.age = 0
+    const { mesh, body, isPolyp } = addSeed(selected, intersects)
+    const pair = new MeshBody(mesh, body)
+    pair.addTo(scene, world)
+    this.meshbody = pair
+    this.isPolyp = isPolyp
+    this.bleached = 0
+    this.faceIndex = selected.faceIndex
+    this.growthSpurts = 0
   }
   grow() {}  // run a simulation then freeze mesh/body
-  update() {}  // grow at a certain age, respond to environment
+  update(t) {
+    this.age = t - this.birth
+    this.isPolyp = this.age < transitionAge
+    const scale = 1.75
+    let grow = false
+    if (this.growthSpurts === 0 && this.age > transitionAge) {
+      grow = true
+      this.growthSpurts = 1
+    } else if (this.growthSpurts === 1 && this.age > 2 * transitionAge) {
+      grow = true
+      this.growthSpurts = 2
+    }
+    if (grow) {
+      this.meshbody.mesh.scale.x *= scale
+      this.meshbody.mesh.scale.y *= scale
+      this.meshbody.mesh.scale.z *= scale
+      const shape = this.meshbody.body.shapes[0]
+      this.meshbody.body.removeShape(shape)
+      shape.radius *= scale
+      this.meshbody.body.addShape(shape)
+    }
+  }  // grow at a certain age, respond to environment
 }
-*/
+
 

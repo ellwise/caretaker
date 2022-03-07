@@ -87,7 +87,7 @@ meshbody.addTo(scene, world)
 export const faces = []
 const numVertices = meshbody.mesh.geometry.attributes.position.array.length
 for (let j = 0; j < numVertices; j += 3) {
-  faces.push({ type: "empty", data: undefined })
+  faces.push({ data: undefined })
 }
 const adjacentIndexes = faceAdjacency(meshbody.mesh.geometry)
 for (let j=0; j < faces.length; j++) {
