@@ -7,15 +7,13 @@ import Stats from "three/examples/jsm/libs/stats.module.js"
 import { Vector3 } from "three"
 import { concretePlasticContact, defaultDefaultContact, plasticPlasticContact } from "./utils/materials.js"
 import { horizon, showHelpers } from "./parameters.js"
-import {water0, water1, water2, water3, water4} from "./utils/colours.js"
-
+import { water0, water1, water2, water3, water4 } from "./utils/colours.js"
 
 export const sizes = {
   width: window.innerWidth,
   height: window.innerHeight,
 }
 const canvas = document.querySelector("canvas.webgl")
-
 
 // Stats
 const stats = new Stats()
@@ -52,8 +50,8 @@ renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.setSize(sizes.width, sizes.height)
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
 // renderer.toneMapping = THREE.CineonToneMapping
-//renderer.toneMappingExposure = 10
-const effect = new OutlineEffect(renderer, { defaultThickness: 0 })//0.005 })
+// renderer.toneMappingExposure = 10
+const effect = new OutlineEffect(renderer, { defaultThickness: 0 })// 0.005 })
 
 // Mouse
 const mouse = new THREE.Vector2()

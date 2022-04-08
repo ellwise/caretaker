@@ -2,25 +2,23 @@ import * as CANNON from "cannon-es"
 import * as THREE from "three"
 import { concreteMaterial } from "./utils/materials.js"
 import { noise3 } from "./utils/random.js"
-import {stone8 as rockColour, selectedColour} from "./utils/colours.js"
+import { stone8 as rockColour, selectedColour } from "./utils/colours.js"
 import { MeshBody } from "./utils/MeshBody.js"
 import { scene, world } from "./base.js"
 import { rockHeight } from "./parameters.js"
 import { faceAdjacency } from "./utils/geometry.js"
-
 
 const numShades = 6
 const rockRadius = 10
 const rockDetail = 1
 
 const createRock = (radius, detail) => {
-
   // geometry - nb: BufferGeometry is already non-indexed (i.e. faces don't share vertices)
   const geometry = new THREE.IcosahedronGeometry(1, detail) // radius has no effect here?
 
   // deform geometry
-  let nPos = []
-  let v3 = new THREE.Vector3()
+  const nPos = []
+  const v3 = new THREE.Vector3()
   for (let j = 0; j < geometry.attributes.position.count; j++) {
     v3.fromBufferAttribute(geometry.attributes.position, j).normalize()
     nPos.push(v3.clone())
@@ -34,7 +32,7 @@ const createRock = (radius, detail) => {
     },
   )
   geometry.computeVertexNormals()
-  //geometry.attributes.position.needsUpdate = true
+  // geometry.attributes.position.needsUpdate = true
 
   // ensure faces can be coloured individually
   const shades = new Uint8Array(numShades)
@@ -85,15 +83,29 @@ meshbody.addTo(scene, world)
 
 // face data
 export const faces = []
-const numVertices = meshbody.mesh.geometry.attributes.position.array.length
+const numVertices = meshbody.mesh.geometry.attributes.position.count
 for (let j = 0; j < numVertices; j += 3) {
-  faces.push({ data: undefined })
+  // put the vertices of each face into an array
+  const faceVertices = []
+  for (let k = 0; k < 3; k++) {
+    faceVertices.push(new THREE.Vector3().fromBufferAttribute(meshbody.mesh.geometry.attributes.position, j + k))
+  }
+  const v = new THREE.Vector3()
+  const rockPosition = new THREE.Vector3(...meshbody.mesh.position)
+  // remember, vertices have relative positions... hence we need to add rockPosition
+  v.add(rockPosition)
+  v.add(faceVertices[0].multiplyScalar(1 / 3))
+  v.add(faceVertices[1].multiplyScalar(1 / 3))
+  v.add(faceVertices[2].multiplyScalar(1 / 3))
+  console.log(v)
+  console.log(faceVertices)
+  console.log("===================")
+  faces.push({ data: undefined, faceCentroid: v })
 }
 const adjacentIndexes = faceAdjacency(meshbody.mesh.geometry)
-for (let j=0; j < faces.length; j++) {
+for (let j = 0; j < faces.length; j++) {
   faces[j].neighbours = adjacentIndexes[j]
 }
-
 
 // colour selected face
 const colourFace = (selected, color) => {
@@ -105,28 +117,17 @@ const colourFace = (selected, color) => {
 }
 
 export const removeHighlight = (selected, intersects) => {
-  // raycast is intersecting something
-  if (intersects.length > 0) {
-    // the first thing being intersected is different to the current selection
-    if (selected !== intersects[0].object) {
-      // remove colour on the currently selected face if something is already selected
-      colourFace(selected, new THREE.Color(rockColour))
-    }
-  } else {
-    // remove colour on the currently selected face
+  // if the raycast isn't intersecting anything
+  // or the first thing being intersected is different to the current selection
+  // then remove colour on the currently selected face
+  if (intersects.length === 0 || intersects[0].object !== selected) {
     colourFace(selected, new THREE.Color(rockColour))
   }
 }
 
-export const addHighlight = (selected, intersects) => {
-  // raycast is intersecting something
-  if (intersects.length > 0) {
-    // the first thing being intersected is different to the current selection
-    if (selected !== intersects[0].object) {
-      // colour the new face
-      colourFace(selected, new THREE.Color(selectedColour))
-    }
-  }
+export const addHighlight = (selected, _) => {
+  // colour the new face
+  colourFace(selected, new THREE.Color(selectedColour))
 }
 
 export const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAction) => {
@@ -135,37 +136,39 @@ export const attachRaycast = (rockMesh, mouse, camera, event, preAction, postAct
   const raycaster = new THREE.Raycaster()
   const raycastSelector = () => {
     const updateSelected = (selected, intersects) => {
-      // raycast is intersecting something
-      if (intersects.length > 0) {
-        // the first thing being intersected is different to the current selection
-        if (selected !== intersects[0].object) {
-          const testSelected = intersects[0]
-          const faceVertexA = new THREE.Vector3().fromBufferAttribute(testSelected.object.geometry.attributes.position, testSelected.face.a)
-          const faceVertexB = new THREE.Vector3().fromBufferAttribute(testSelected.object.geometry.attributes.position, testSelected.face.b)
-          const faceVertexC = new THREE.Vector3().fromBufferAttribute(testSelected.object.geometry.attributes.position, testSelected.face.c)
-          const rockPosition = new THREE.Vector3(...testSelected.object.position)
-          // face is fully above ground
-          if (faceVertexA.y > -rockPosition.y && faceVertexB.y > -rockPosition.y && faceVertexC.y > -rockPosition.y) {
-            const v = new THREE.Vector3()
-            v.add(rockPosition)
-            v.add(faceVertexA.multiplyScalar(1 / 3))
-            v.add(faceVertexB.multiplyScalar(1 / 3))
-            v.add(faceVertexC.multiplyScalar(1 / 3))
-            selected = testSelected
-            selected.faceCentroid = v
-          }
-        }
-      } else {
-        // nothing is being intersected
-        selected = null
-      }
-      return selected
+      // if the raycast doesn't intersect anything, the selection is null
+      if (intersects.length === 0) return null
+
+      // if the first thing the raycast intersects is the current selection
+      // then keep that selection and exit early
+      if (intersects[0].object === selected) return selected
+
+      // if the raycast intersects a face that's below ground
+      // then the selection is null
+      const testSelected = intersects[0]
+      const testSelectedVertices = testSelected.object.geometry.attributes.position
+      const faceVertexA = new THREE.Vector3().fromBufferAttribute(testSelectedVertices, testSelected.face.a)
+      const faceVertexB = new THREE.Vector3().fromBufferAttribute(testSelectedVertices, testSelected.face.b)
+      const faceVertexC = new THREE.Vector3().fromBufferAttribute(testSelectedVertices, testSelected.face.c)
+      const rockPosition = new THREE.Vector3(...testSelected.object.position)
+      if (faceVertexA.y < -rockPosition.y) return null
+      if (faceVertexB.y < -rockPosition.y) return null
+      if (faceVertexC.y < -rockPosition.y) return null
+
+      // otherwise, the selection should be the raycast intersection
+      const v = new THREE.Vector3()
+      v.add(rockPosition)
+      v.add(faceVertexA.divideScalar(3))
+      v.add(faceVertexB.divideScalar(3))
+      v.add(faceVertexC.divideScalar(3))
+      testSelected.faceCentroid = v
+      return testSelected
     }
     raycaster.setFromCamera(mouse, camera)
     intersects = raycaster.intersectObjects([rockMesh])
-    if (preAction && selected) { preAction(selected, intersects) }
+    if (preAction && selected) preAction(selected, intersects)
     selected = updateSelected(selected, intersects)
-    if (postAction && selected) { postAction(selected, intersects) }
+    if (postAction && selected) postAction(selected, intersects)
   }
   window.addEventListener(event, raycastSelector)
 }

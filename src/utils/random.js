@@ -1,6 +1,5 @@
 import * as openSimplexNoise from "open-simplex-noise"
 
-
 const epoch = new Date(Date.now()) // milliseconds
 const seed = new Date(epoch.getFullYear(), epoch.getMonth(), epoch.getDate())
 

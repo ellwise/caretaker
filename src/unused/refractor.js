@@ -18,22 +18,22 @@ const refractorMaterial = new THREE.MeshPhysicalMaterial({
   roughness: 0,
   transmission: 1,
   thickness: 2,
-  specularIntensity: 0,  // turn off specular reflections
+  specularIntensity: 0, // turn off specular reflections
   clearcoat: 1,
   side: THREE.BackSide, // refract from inside rather than outside
 })
-let refractor = new THREE.Mesh( refractorGeometry, refractorMaterial );
+const refractor = new THREE.Mesh(refractorGeometry, refractorMaterial)
 
-//scene.add(refractor)
+// scene.add(refractor)
 
 const updateRefractor = (t) => {
   refractor.geometry.userData.nPos.forEach((p, idx) => {
-  	let ns = noise4(p.x, p.y, p.z, t) * 0.1
-    v3.copy(p).multiplyScalar(10).addScaledVector(p, ns * 10);
-    refractor.geometry.attributes.position.setXYZ(idx, v3.x, v3.y, v3.z);
+  	const ns = noise4(p.x, p.y, p.z, t) * 0.1
+    v3.copy(p).multiplyScalar(10).addScaledVector(p, ns * 10)
+    refractor.geometry.attributes.position.setXYZ(idx, v3.x, v3.y, v3.z)
   })
-  refractor.geometry.computeVertexNormals();
-  refractor.geometry.attributes.position.needsUpdate = true;
+  refractor.geometry.computeVertexNormals()
+  refractor.geometry.attributes.position.needsUpdate = true
 }
 
 export { refractor, updateRefractor }

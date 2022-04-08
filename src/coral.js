@@ -71,22 +71,16 @@ const repelSpheres = (s1, s2, world) => {
   world.addEventListener("postStep", (event) => spring.applyForce())
 }
 
-const addSeed = (selected, intersects) => {
-  // raycast is intersecting something
-  if (intersects.length > 0) {
-    // the first thing being intersected is different to the current selection
-    if (selected !== intersects[0].object) {
-      // colour the new face
-      const colour = new THREE.Color(seedColor)
-      colour.setHSL(Math.random(), 1, 0.6)
-      const isPolyp = true  // Math.random() > 0.5
-      const radius = isPolyp ? 0.5 : 1
-      const { mesh, body } = createSphere(radius, undefined, undefined, 0, colour)
-      mesh.position.copy(selected.faceCentroid)
-      body.position.copy(selected.faceCentroid)
-      return { mesh: mesh, body: body, isPolyp: isPolyp }
-    }
-  }
+const addSeed = (position) => {
+  // colour the new face
+  const colour = new THREE.Color(seedColor)
+  colour.setHSL(Math.random(), 1, 0.6)
+  const isPolyp = true // Math.random() > 0.5
+  const radius = isPolyp ? 0.5 : 1
+  const { mesh, body } = createSphere(radius, undefined, undefined, 0, colour)
+  mesh.position.copy(position)
+  body.position.copy(position)
+  return { mesh: mesh, body: body, isPolyp: isPolyp }
 }
 
 export { createSphere, linkSpheres, repelSpheres, addSeed }
@@ -120,24 +114,25 @@ gui.add(params, "growBalls")
 params.growBalls()
 */
 
-
-const transitionAge = 10
+const transitionAge = 3
 
 export class Coral {
-  constructor(t, selected, intersects) {
+  constructor (t, position) {
     this.birth = t
     this.age = 0
-    const { mesh, body, isPolyp } = addSeed(selected, intersects)
+    const { mesh, body, isPolyp } = addSeed(position)
     const pair = new MeshBody(mesh, body)
     pair.addTo(scene, world)
     this.meshbody = pair
     this.isPolyp = isPolyp
     this.bleached = 0
-    this.faceIndex = selected.faceIndex
+    // this.faceIndex = selected.faceIndex
     this.growthSpurts = 0
+    this.hasBred = false
   }
-  grow() {}  // run a simulation then freeze mesh/body
-  update(t) {
+
+  grow () {} // run a simulation then freeze mesh/body
+  update (t) {
     this.age = t - this.birth
     this.isPolyp = this.age < transitionAge
     const scale = 1.75
@@ -158,7 +153,9 @@ export class Coral {
       shape.radius *= scale
       this.meshbody.body.addShape(shape)
     }
-  }  // grow at a certain age, respond to environment
+    if (this.age > 3 * transitionAge) {
+      this.meshbody.mesh.material.color = new THREE.Color(0xffffff)
+      this.bleached += 1
+    }
+  } // grow at a certain age, respond to environment
 }
-
-

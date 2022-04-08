@@ -2,9 +2,9 @@ import * as CANNON from "cannon-es"
 import * as THREE from "three"
 import { camera, controls, gui, mouse, scene, stats, world, effect } from "./base.js"
 import { updateLighting } from "./lighting.js"
-//import { composer, updateSun } from "./postprocessing.js"
-//import { refractor, updateRefractor } from "./refractor.js"
-//import { updateRefractor } from "./sea.js"
+// import { composer, updateSun } from "./postprocessing.js"
+// import { refractor, updateRefractor } from "./refractor.js"
+// import { updateRefractor } from "./sea.js"
 import { createSphere, linkSpheres, repelSpheres, addSeed } from "./coral.js"
 import { meshbody as rockPair, faces as rockFaces, attachRaycast, removeHighlight, addHighlight } from "./rock.js"
 import { pair as groundPair } from "./sand.js"
@@ -114,58 +114,76 @@ registerMeshBodyPair(rockPair)
 attachRaycast(rockPair.mesh, mouse, camera, "mousemove", removeHighlight, addHighlight)
 const clickHandler = (selected, intersects) => {
   console.log(selected.faceIndex)
-  if (rockFaces[selected.faceIndex].data === undefined) {
-    // place either coral or a polyp if empty
-    if (params.polypData !== undefined) {
-      // place the polyp from the inventory
-      params.polypData.data.meshbody.mesh.position.copy(selected.faceCentroid)
-      params.polypData.data.meshbody.body.position.copy(selected.faceCentroid)
-      params.polypData.data.meshbody.mesh.visible = true
-      rockFaces[selected.faceIndex] = params.polypData
-      params.polypData = undefined
-      inventory.controllers[1].setValue("")
-    } else {
-      // randomly generate a coral or polyp
-      /*const { mesh, body, isPolyp } = addSeed(selected, intersects)
-      const pair = new MeshBody(mesh, body)
-      pair.addTo(scene, world)
-      */
-      rockFaces[selected.faceIndex].data = new Coral(elapsedTime, selected, intersects)
-      registerMeshBodyPair(rockFaces[selected.faceIndex].data.meshbody)
+  const rockFaceIsEmpty = rockFaces[selected.faceIndex].data === undefined
+  const polypInInventory = params.polypData !== undefined
+  const rockFaceHasPolyp = rockFaces[selected.faceIndex].data?.isPolyp
+  const newSelection = intersects.length > 0 && intersects[0].object !== selected
+  const algaeInInventory = params.algae !== 0xffffff
+
+  // if the rock face is empty
+  // and the inventory has a polyp
+  // then place that polyp on the rock face
+  if (rockFaceIsEmpty && polypInInventory) {
+    params.polypData.data.meshbody.mesh.position.copy(selected.faceCentroid)
+    params.polypData.data.meshbody.body.position.copy(selected.faceCentroid)
+    params.polypData.data.meshbody.mesh.visible = true
+    rockFaces[selected.faceIndex] = params.polypData
+    params.polypData = undefined
+    inventory.controllers[1].setValue("")
+    return
+  }
+
+  // if the rock face is empty
+  // and the raycast is intersecting something
+  // and the first thing being intersected is different to the current selection
+  // then create and register a new coral
+  if (rockFaceIsEmpty && newSelection) {
+    const position = selected.faceCentroid
+    rockFaces[selected.faceIndex].data = new Coral(elapsedTime, position)
+    registerMeshBodyPair(rockFaces[selected.faceIndex].data.meshbody)
+    return
+  }
+
+  // if the rock face has coral
+  // and the inventory has no algae
+  // then partially bleach it
+  // and extract algae
+  if (!rockFaceIsEmpty && !rockFaceHasPolyp && !algaeInInventory) {
+    const rgb = rockFaces[selected.faceIndex].data.meshbody.mesh.material.color
+    const colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
+    inventory.controllers[0].setValue(colour.getHex())
+    if (rockFaces[selected.faceIndex].data.bleached < 1) {
+      rockFaces[selected.faceIndex].data.bleached += 0.5
     }
-  } else if (!rockFaces[selected.faceIndex].data.isPolyp) {
-    // if the face has coral
-    if (params.algae === 0xffffff) {
-      // if the inventory has no algae, partially bleach it and extract algae
-      const rgb = rockFaces[selected.faceIndex].data.meshbody.mesh.material.color
-      let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
-      inventory.controllers[0].setValue(colour.getHex())
-      if (rockFaces[selected.faceIndex].data.bleached < 1) {
-        rockFaces[selected.faceIndex].data.bleached += 0.5
-      }
-      colour.lerpHSL(new THREE.Color(0xffffff), rockFaces[selected.faceIndex].data.bleached)  // bleach
-      rockFaces[selected.faceIndex].data.meshbody.mesh.material.color = colour
-    } else {
-      // else donate the algae to the coral - not sure this is quite right - seems to retain some colour in the algae over time
-      const rgb = rockFaces[selected.faceIndex].data.meshbody.mesh.material.color
-      let colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
-      colour.lerpHSL(new THREE.Color(params.algae), 0.5)
-      rockFaces[selected.faceIndex].data.meshbody.mesh.material.color = colour
-      inventory.controllers[0].setValue(0xffffff)
-    }
-  } else if (rockFaces[selected.faceIndex].data.isPolyp) {
-    // if the face has a polyp, remove it from the face and put it into the inventory
-    if (params.polypData === undefined) {
-      // but only if the inventory is empty, otherwise do nothing
-      params.polypData = rockFaces[selected.faceIndex]
-      rockFaces[selected.faceIndex] = { type: "empty", data: undefined }
-      inventory.controllers[1].setValue(params.polypData.data.meshbody.mesh.uuid) // Face ${selected.faceIndex}
-      params.polypData.data.meshbody.mesh.visible = false
-    }
+    colour.lerpHSL(new THREE.Color(0xffffff), rockFaces[selected.faceIndex].data.bleached) // bleach
+    rockFaces[selected.faceIndex].data.meshbody.mesh.material.color = colour
+    return
+  }
+
+  // if the rock face has coral
+  // and the inventory has algae
+  // then donate the algae to the coral
+  if (!rockFaceIsEmpty && !rockFaceHasPolyp) {
+    const rgb = rockFaces[selected.faceIndex].data.meshbody.mesh.material.color
+    const colour = new THREE.Color(rgb.r, rgb.g, rgb.b)
+    colour.lerpHSL(new THREE.Color(params.algae), 0.5)
+    rockFaces[selected.faceIndex].data.meshbody.mesh.material.color = colour
+    inventory.controllers[0].setValue(0xffffff)
+    return
+  }
+
+  // if the face has a polyp
+  // and the inventory is empty
+  // then remove it from the face and put it into the inventory
+  if (rockFaceHasPolyp && !polypInInventory) {
+    params.polypData = rockFaces[selected.faceIndex]
+    rockFaces[selected.faceIndex] = { type: "empty", data: undefined }
+    inventory.controllers[1].setValue(params.polypData.data.meshbody.mesh.uuid) // Face ${selected.faceIndex}
+    params.polypData.data.meshbody.mesh.visible = false
+    return
   }
 }
 attachRaycast(rockPair.mesh, mouse, camera, "click", undefined, clickHandler)
-
 
 /*
  *  Constrain coral to floor
@@ -181,10 +199,11 @@ for (let j = 0; j < spheres[0].length; j += 2) {
   )
 }
 
-
 /**
  * Animate
  */
+
+console.log(rockFaces)
 const clock = new THREE.Clock()
 const tick = () => {
   const delta = clock.getDelta()
@@ -193,8 +212,8 @@ const tick = () => {
   // Physics Update
   world.step(1 / 75, delta, 5)
 
-  //updateRefractor(elapsedTime)
-  //refractor.position.copy(camera.position)
+  // updateRefractor(elapsedTime)
+  // refractor.position.copy(camera.position)
 
   // Update Meshes to match Bodies
   for (const pair of updateList) {
@@ -203,12 +222,32 @@ const tick = () => {
 
   // Update Lighting
   updateLighting(elapsedTime)
-  //updateSun(elapsedTime)
+  // updateSun(elapsedTime)
 
   // Update coral
-  for (let face of rockFaces) {
+  for (const face of rockFaces) {
     if (face.data !== undefined) {
       face.data.update(elapsedTime)
+    }
+  }
+
+  // Grow new coral
+  // iterate through faces
+  for (let j = 0; j < rockFaces.length; j++) {
+    // if a coral is a certain age, randomly decide whether to grow a new polyp
+    if (rockFaces[j].data !== undefined) {
+      if (rockFaces[j].data.age > 10) {
+        // grow it on any neighbouring face that is free
+        for (const k of rockFaces[j].neighbours) {
+          if (!rockFaces[j].data.hasBred && rockFaces[k].data === undefined) {
+            const position = rockFaces[k].faceCentroid
+            rockFaces[k].data = new Coral(elapsedTime, position)
+            registerMeshBodyPair(rockFaces[k].data.meshbody)
+            rockFaces[j].data.hasBred = true
+            console.log(k)
+          }
+        }
+      }
     }
   }
 
